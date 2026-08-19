@@ -167,10 +167,10 @@ REORGANIZE_PLAN: list[MoveOp] = [
     MoveOp("1tYYImVJhChyfiTeT6VImg6_JkppO-Rs_", "CTO Memo BM-004 (LD2410C Serial Validation) - CLOSED", "01_BENCH_EVIDENCE", "05_Open_Actions"),
     MoveOp("1cKOdu3DKpVn1qAIfDq1cIW9gWXE0QEHp", "CTO Memo BM-005 (ESP32-C3 Sensor-Packet Translation) - CLOSED", "01_BENCH_EVIDENCE", "05_Open_Actions"),
     # --- Partner updates -> AI_REVIEW ---
-    # UNRESOLVED: no file matching this ID/description was found anywhere
-    # in the Drive tree during verification. Left as a placeholder on
-    # purpose so this entry is skipped (and reported) rather than guessed.
-    MoveOp("1HK31CCH...", "Partner Update 1 (UNRESOLVED - could not locate; verify with user)", "AI_REVIEW", None),
+    # Found 2026-08-19 in a follow-up audit sweep: the spec ID (1HK31CCH...)
+    # had a 1/t homoglyph typo, not the usual l/I or 0/O pattern, which is
+    # why the initial verification pass missed it.
+    MoveOp("1HK3tCCHnFd8x4BhNnlogqklDoNnzGW7J8m7DxSA_4tw", "Partner Update 1 (ChatGPT Handoff Brief, May 22 2026)", "AI_REVIEW", "ROOT"),
     MoveOp("1BxA3qasBL8_FRiysGVgTFQhoEykOluIJ", "Partner Update 2 (All-Partner Update 20260506)", "AI_REVIEW", "ROOT"),
 ]
 

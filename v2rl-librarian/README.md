@@ -71,12 +71,29 @@ the result:
   matters because the old name-lookup fallback would otherwise have picked
   arbitrarily between duplicates. These extra empty duplicates aren't
   touched by this tool; clean them up manually if desired.
-- **One entry could not be resolved**: "Partner Update 1" (spec ID
-  `1HK31CCH...`, destined for `AI_REVIEW`). No file matching that ID or
-  description exists anywhere in the Drive tree that was searched. It's
-  left as a placeholder in `REORGANIZE_PLAN` on purpose — `validate_registry()`
-  skips and reports it rather than guessing. If you know which file this
-  should be, add its real ID before running `--reorganize`.
+- **"Partner Update 1" was initially unresolved, then found**: the spec ID
+  (`1HK31CCH...`) had a `1`/`t` homoglyph typo — a different pattern than
+  the `l`/`I`/`0`/`O` swaps everywhere else, which is why the first pass
+  missed it. It resolved to "V2RETROLINK — ChatGPT Handoff Brief | May 22
+  2026" (`1HK3tCCHnFd8x4BhNnlogqklDoNnzGW7J8m7DxSA_4tw`), found sitting
+  loose at Root. All 21 `REORGANIZE_PLAN` entries are now resolved and were
+  executed live on 2026-08-19.
+- **Further clutter found at Root during a follow-up audit, left untouched
+  on purpose** (out of scope for the original plan — flag for a future,
+  separately-approved cleanup pass if wanted):
+  - Two more stale duplicate docs sitting loose at Root: another "Master
+    Program Binder Claude.docx" (`1eV9NvHVU3F5_ANIJYEM55tNXxr6n7n80`,
+    older, distinct from the one already filed in `00_GOVERNING`) and
+    another "RevA Library Manifest Claude.docx"
+    (`1N5DIeZaJ3Ag-HrpB2jCDmnH__2u8IuOZ`, superseded by the "_Updated_"
+    version already in `00_GOVERNING`).
+  - A third, entirely different abandoned folder-naming generation under
+    Root, using a `10_/20_/30_/40_/50_` numbering scheme
+    (`10_BENCH_EVIDENCE`, `20_PRODUCT_LINE`, `30_DRAFTS`,
+    `40_REFERENCE`, `50_SUPERSEDED`), all empty, alongside the
+    `00_/01_/02_/03_/04_`-numbered duplicate generation already noted
+    above. At least three separate provisioning attempts appear to have
+    happened over time.
 
 `--audit` and `--upload` don't depend on `REORGANIZE_PLAN` at all, so they
 work regardless of the above.

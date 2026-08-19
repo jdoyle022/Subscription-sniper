@@ -1,0 +1,64 @@
+name: V2RETROLINK Drive Librarian - file inbox
+
+# Unattended filing run: no AI is in the loop here. This just executes the
+# deterministic routing rules already in v2rl-librarian/v2rl_librarian.py
+# against the 00_INBOX Drive folder, on a schedule, headlessly.
+#
+# One-time setup required before this will work (see v2rl-librarian/README.md
+# "Unattended automation" section):
+#   1. Run the script locally once and complete the interactive OAuth
+#      consent flow, producing credentials.json and token.json.
+#   2. Add their contents as repo secrets:
+#        Settings -> Secrets and variables -> Actions -> New repository secret
+#        V2RL_CREDENTIALS_JSON = contents of credentials.json
+#        V2RL_TOKEN_JSON        = contents of token.json
+#   3. That's it -- this workflow will run on the schedule below, or can be
+#      triggered manually from the Actions tab.
+
+on:
+  schedule:
+    - cron: "0 */6 * * *"  # every 6 hours; adjust to taste
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Preview only, don't move anything"
+        type: boolean
+        default: false
+
+jobs:
+  file-inbox:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        working-directory: v2rl-librarian
+        run: pip install -r requirements.txt
+
+      - name: Write Drive credentials from secrets
+        working-directory: v2rl-librarian
+        run: |
+          if [ -z "${{ secrets.V2RL_CREDENTIALS_JSON }}" ] || [ -z "${{ secrets.V2RL_TOKEN_JSON }}" ]; then
+            echo "::error::V2RL_CREDENTIALS_JSON and/or V2RL_TOKEN_JSON repo secrets are not set. See v2rl-librarian/README.md 'Unattended automation'."
+            exit 1
+          fi
+          cat > credentials.json <<< "${{ secrets.V2RL_CREDENTIALS_JSON }}"
+          cat > token.json <<< "${{ secrets.V2RL_TOKEN_JSON }}"
+
+      - name: Run file-inbox
+        working-directory: v2rl-librarian
+        run: |
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            python v2rl_librarian.py --file-inbox --dry-run
+          else
+            python v2rl_librarian.py --file-inbox --yes
+          fi
+
+      - name: Clean up credentials from runner
+        if: always()
+        working-directory: v2rl-librarian
+        run: rm -f credentials.json token.json

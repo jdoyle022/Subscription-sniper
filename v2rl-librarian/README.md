@@ -38,6 +38,13 @@ python v2rl_librarian.py --reorganize --yes
 # Command 2: upload-bundle — from a directory or a .zip
 python v2rl_librarian.py --upload /path/to/staging_folder --dry-run
 python v2rl_librarian.py --upload /path/to/bundle.zip --yes
+
+# Command 4: file-inbox — Drive-to-Drive, no local path needed.
+# Scans the 00_INBOX Drive folder and files each item using the same
+# routing rules as upload-bundle. This is the one meant to run unattended
+# (see "Unattended automation" below).
+python v2rl_librarian.py --file-inbox --dry-run
+python v2rl_librarian.py --file-inbox --yes
 ```
 
 Flags: `--dry-run` previews without changing Drive, `--yes` skips the
@@ -100,11 +107,46 @@ work regardless of the above.
 
 ## Folder resolution
 
-Folder IDs with a fixed value in `FOLDER_IDS` are used as-is. Three folders
-(`01_BENCH_EVIDENCE`, `06_DRAWINGS`, `AI_REVIEW`) have no fixed ID in the
-spec — they're resolved by searching for a folder with that name directly
-under Root, and created there automatically if missing (matching the
-`reorganize` requirement that `06_DRAWINGS` exists under Root).
+Folder IDs with a fixed value in `FOLDER_IDS` are used as-is. `06_DRAWINGS`
+has no fixed ID in the spec — it's resolved by searching for a folder with
+that name directly under Root, and created there automatically if missing.
+
+`00_INBOX` (`1HIhFeG8AK1-7Nu0PAMjGbIZ-ycltHLCu`) was created 2026-08-19 as
+the landing zone `--file-inbox` watches. Point new V2RETROLINK session
+outputs there by whatever means (manual drag-and-drop, another tool, another
+AI) and either run `--file-inbox` yourself or let the scheduled workflow
+pick them up (see "Unattended automation" below).
+
+## Unattended automation
+
+`--file-inbox` is designed to run with no human or AI in the loop at
+execution time — it's pure deterministic routing against the rules below.
+A GitHub Actions workflow (`.github/workflows/v2rl-librarian-inbox.yml`,
+one level up from this directory) runs it on a schedule (every 6 hours by
+default; edit the `cron` line to change that) and can also be triggered
+manually from the repo's Actions tab.
+
+**One-time setup** (you only do this once, not per-run):
+
+1. Complete the interactive OAuth setup above (steps 1–3) locally, then run
+   any command once, e.g. `python v2rl_librarian.py --audit`. Sign in
+   through the browser prompt. This produces `credentials.json` and
+   `token.json` in this directory.
+2. In the GitHub repo, go to **Settings → Secrets and variables → Actions →
+   New repository secret** and add two secrets:
+   - `V2RL_CREDENTIALS_JSON` — paste the full contents of `credentials.json`
+   - `V2RL_TOKEN_JSON` — paste the full contents of `token.json`
+3. That's it. The workflow writes both files from the secrets before each
+   run and deletes them from the runner afterward — neither file is ever
+   committed to the repo. Never commit `credentials.json` or `token.json`
+   yourself either (both are in `.gitignore`).
+
+This works because the OAuth token contains a refresh token: Google issues
+a new short-lived access token from it automatically on every run, with no
+browser interaction needed, for as long as the refresh token stays valid
+(until you revoke access or don't use it for an extended period). If it
+ever does expire or get revoked, redo step 1 and update the
+`V2RL_TOKEN_JSON` secret.
 
 ## Upload routing rules
 

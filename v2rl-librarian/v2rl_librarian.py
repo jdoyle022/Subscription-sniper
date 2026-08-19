@@ -99,6 +99,9 @@ FOLDER_MIME = "application/vnd.google-apps.folder"
 # for (06_DRAWINGS doesn't exist yet, per the reorganize spec).
 FOLDER_IDS = {
     "ROOT": "1ckNuazhDn4zk6zfBGgEDaLlEtskyDX0o",  # was ...DaLIEtskyDX00 (typo)
+    # Landing zone for new V2RETROLINK session outputs, watched by
+    # `--file-inbox`. Created 2026-08-19; nothing else writes here.
+    "00_INBOX": "1HIhFeG8AK1-7Nu0PAMjGbIZ-ycltHLCu",
     "00_GOVERNING": "1yaeIeXk0sQv-Pd4767le85fdV6mFizoC",  # was 1yaele... (typo)
     # Two duplicate 01_BENCH_EVIDENCE folders exist under ROOT from prior
     # provisioning runs; this is the one actually in use (already contains
@@ -355,8 +358,11 @@ def resolve_folder_ids(service, dry_run: bool = False) -> dict[str, str]:
     return resolved
 
 
-def move_file(service, file_id: str, dest_folder_id: str, dry_run: bool = False) -> tuple[bool, str]:
-    """Move a file to dest_folder_id, replacing all of its current parents."""
+def move_file(service, file_id: str, dest_folder_id: str, dry_run: bool = False,
+              new_name: Optional[str] = None) -> tuple[bool, str]:
+    """Move a file to dest_folder_id, replacing all of its current parents.
+    If new_name is given, also renames the file in the same call (used by
+    --file-inbox to apply dual-unit naming while filing)."""
     try:
         meta = _files_get(service, file_id, fields="id, name, parents, trashed")
     except HttpError as e:
@@ -366,24 +372,29 @@ def move_file(service, file_id: str, dest_folder_id: str, dry_run: bool = False)
         return False, "file is trashed; skipped"
 
     current_parents = meta.get("parents", [])
-    if current_parents == [dest_folder_id]:
+    already_placed = current_parents == [dest_folder_id]
+    if already_placed and not new_name:
         return True, "already in destination; no-op"
 
+    display_name = new_name or meta.get("name")
     if dry_run:
-        return True, f"[DRY RUN] would move '{meta.get('name')}' -> {dest_folder_id}"
+        action = "rename + move" if new_name else "move"
+        return True, f"[DRY RUN] would {action} '{meta.get('name')}' -> '{display_name}' in {dest_folder_id}"
+
+    update_kwargs = {"fields": "id, parents, name"}
+    if not already_placed:
+        update_kwargs["addParents"] = dest_folder_id
+        update_kwargs["removeParents"] = ",".join(current_parents) if current_parents else None
+    if new_name:
+        update_kwargs["body"] = {"name": new_name}
 
     try:
-        _files_update(
-            service,
-            file_id,
-            addParents=dest_folder_id,
-            removeParents=",".join(current_parents) if current_parents else None,
-            fields="id, parents",
-        )
+        _files_update(service, file_id, **update_kwargs)
     except HttpError as e:
         return False, f"move failed ({e})"
 
-    return True, f"moved '{meta.get('name')}' -> {dest_folder_id}"
+    verb = "renamed and moved" if new_name else "moved"
+    return True, f"{verb} '{meta.get('name')}' -> '{display_name}' in {dest_folder_id}"
 
 
 def is_placeholder_id(file_id: str) -> bool:
@@ -614,6 +625,84 @@ def cmd_upload_bundle(service, path: str, dry_run: bool, assume_yes: bool, overw
 
 
 # ==========================================================================
+# Command: file-inbox
+# ==========================================================================
+# Drive-to-Drive filer: scans 00_INBOX and moves each file straight to its
+# canonical destination using the exact same routing rules as upload-bundle
+# (UPLOAD_KEYWORD_ROUTES / UPLOAD_GLOB_ROUTES / normalize_dual_unit_name).
+# This is the operation meant to run unattended (e.g. a scheduled CI job)
+# with --yes: point new V2RETROLINK session outputs at 00_INBOX by any
+# means (manual upload, another tool, another AI) and this sorts them.
+# Purely deterministic — no AI judgment involved at run time.
+
+def cmd_file_inbox(service, dry_run: bool, assume_yes: bool) -> int:
+    folders = resolve_folder_ids(service, dry_run=dry_run)
+    inbox_id = folders.get("00_INBOX")
+    if not inbox_id:
+        logging.error("00_INBOX folder not resolved.")
+        return 1
+
+    try:
+        result = _files_list(
+            service,
+            q=f"'{inbox_id}' in parents and trashed = false",
+            fields="files(id, name, mimeType)",
+            pageSize=200,
+        )
+    except HttpError as e:
+        logging.error("Could not list 00_INBOX contents: %s", e)
+        return 1
+
+    entries = [f for f in result.get("files", []) if f.get("mimeType") != FOLDER_MIME]
+    routed = []
+    unmatched = []
+    for f in entries:
+        dest_key = route_upload_file(f["name"])
+        if not dest_key:
+            unmatched.append(f)
+            continue
+        new_name = normalize_dual_unit_name(f["name"])
+        routed.append((f, new_name, dest_key))
+
+    print(f"\n00_INBOX: {len(entries)} file(s) found, {len(routed)} routed, {len(unmatched)} unmatched.\n")
+    for f, new_name, dest_key in routed:
+        rename_note = f" (renaming to '{new_name}')" if new_name != f["name"] else ""
+        print(f"  - {f['name']} -> {dest_key}{rename_note}")
+    if unmatched:
+        print("\nUnmatched (left in place in 00_INBOX, no routing rule matched):")
+        for f in unmatched:
+            print(f"  - {f['name']}")
+
+    if not routed:
+        print("\nNothing to file.")
+        return 0
+
+    if not dry_run and not assume_yes:
+        confirm = input(f"\nProceed with filing {len(routed)} file(s) out of 00_INBOX? [y/N] ")
+        if confirm.strip().lower() != "y":
+            print("Aborted.")
+            return 1
+
+    ok_count, fail_count = 0, 0
+    print()
+    for f, new_name, dest_key in routed:
+        dest_id = folders.get(dest_key)
+        if not dest_id:
+            print(f"[SKIP] {f['name']}: destination '{dest_key}' not resolved")
+            fail_count += 1
+            continue
+        rename_arg = new_name if new_name != f["name"] else None
+        success, message = move_file(service, f["id"], dest_id, dry_run=dry_run, new_name=rename_arg)
+        status = "OK" if success else "FAIL"
+        print(f"[{status}] {message}")
+        ok_count += 1 if success else 0
+        fail_count += 0 if success else 1
+
+    print(f"\nSummary: {ok_count} filed, {fail_count} failed, {len(unmatched)} left unmatched in 00_INBOX.")
+    return 0 if fail_count == 0 else 2
+
+
+# ==========================================================================
 # Command: audit
 # ==========================================================================
 
@@ -709,6 +798,10 @@ def build_arg_parser() -> argparse.ArgumentParser:
                          help="Run Command 3: audit canonical folders and print a state table.")
     action.add_argument("--upload", metavar="PATH", dest="upload_path",
                          help="Run Command 2: upload a staging directory or .zip bundle to canonical folders.")
+    action.add_argument("--file-inbox", action="store_true",
+                         help="Scan the 00_INBOX Drive folder and move each file to its canonical "
+                              "destination using the same routing rules as --upload. No local path "
+                              "needed -- designed to run unattended (pair with --yes).")
 
     parser.add_argument("--dry-run", action="store_true",
                          help="Preview actions without changing anything on Drive.")
@@ -742,6 +835,8 @@ def main(argv=None) -> int:
     if args.upload_path:
         return cmd_upload_bundle(service, args.upload_path, dry_run=args.dry_run,
                                   assume_yes=args.yes, overwrite=args.overwrite)
+    if args.file_inbox:
+        return cmd_file_inbox(service, dry_run=args.dry_run, assume_yes=args.yes)
 
     return 1
 

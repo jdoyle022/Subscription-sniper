@@ -148,6 +148,33 @@ browser interaction needed, for as long as the refresh token stays valid
 ever does expire or get revoked, redo step 1 and update the
 `V2RL_TOKEN_JSON` secret.
 
+## ChatGPT peer-review gate
+
+New documents shouldn't reach the automated filer until ChatGPT has
+reviewed them — the actual V2RETROLINK documents already carry an
+"@ ChatGPT — Peer Reviewer" convention, this just formalizes it with
+folders instead of ad hoc requests.
+
+- **`00_INBOX/_PENDING_REVIEW`** (`1sBmr0ngEb0EuilP6gMY-hS5YfeSyMDbl`) is
+  the staging area. New drafts land here — Claude is instructed (see this
+  directory's `CLAUDE.md`) to upload new documents here, never straight to
+  `00_INBOX` itself.
+- **`--file-inbox` only scans `00_INBOX`'s direct children, not
+  subfolders.** A file sitting in `_PENDING_REVIEW` is invisible to it —
+  that's the gate. Nothing gets auto-filed until it's promoted (moved) out
+  of staging and into `00_INBOX` proper.
+- **Promotion today is manual**: once ChatGPT has reviewed a draft and it's
+  approved, move the file from `_PENDING_REVIEW` to `00_INBOX` in Drive
+  (drag-and-drop, or ask Claude to do it via its Drive access). The next
+  scheduled `--file-inbox` run (or a manual one) files it from there.
+
+This is intentionally the simplest version that works. It doesn't
+currently automate the review step itself — ChatGPT isn't wired into this
+pipeline programmatically, so a human decides when something's approved
+and does the promotion. If ChatGPT ever gets its own Drive write access,
+or a scripted way to flag approval, promotion could become another
+scheduled/triggered step instead of a manual one.
+
 ## Upload routing rules
 
 | Filename match | Destination |

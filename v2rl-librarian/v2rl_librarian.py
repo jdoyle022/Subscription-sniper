@@ -102,6 +102,11 @@ FOLDER_IDS = {
     # Landing zone for new V2RETROLINK session outputs, watched by
     # `--file-inbox`. Created 2026-08-19; nothing else writes here.
     "00_INBOX": "1HIhFeG8AK1-7Nu0PAMjGbIZ-ycltHLCu",
+    # Staging subfolder under 00_INBOX for unreviewed drafts. Deliberately
+    # NOT scanned by --file-inbox (which only lists 00_INBOX's direct
+    # children) -- this is the ChatGPT peer-review gate. See README.md
+    # "ChatGPT peer-review gate" and this directory's CLAUDE.md.
+    "00_INBOX_PENDING_REVIEW": "1sBmr0ngEb0EuilP6gMY-hS5YfeSyMDbl",
     "00_GOVERNING": "1yaeIeXk0sQv-Pd4767le85fdV6mFizoC",  # was 1yaele... (typo)
     # Two duplicate 01_BENCH_EVIDENCE folders exist under ROOT from prior
     # provisioning runs; this is the one actually in use (already contains

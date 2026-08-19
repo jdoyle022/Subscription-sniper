@@ -45,21 +45,41 @@ confirmation prompt on a live run, `--overwrite` lets `--upload` replace an
 existing same-named file, `--max-retries N` tunes rate-limit backoff,
 `-v`/`--verbose` enables debug logging.
 
-## Important: fill in real file IDs before running `--reorganize`
+## ID verification (2026-08-19)
 
-The move plan in `REORGANIZE_PLAN` (top of `v2rl_librarian.py`) was seeded
-from truncated example IDs (e.g. `17BFKDQB...`). Google Drive file IDs are
-fixed-length opaque strings, so a truncated one can't resolve to a real
-file. Before running `--reorganize` for real:
+`REORGANIZE_PLAN` and `FOLDER_IDS` were originally seeded from truncated
+example IDs in the project spec (e.g. `17BFKDQB...`), which can't resolve to
+real files or folders. These were then verified and corrected against the
+live Drive tree (via a separate connector with read/write Drive access, not
+this script) by searching for each named document/folder and cross-checking
+the result:
 
-1. Open each source file in Drive, copy the ID out of its share link
-   (`drive.google.com/file/d/<FULL_ID>/view`).
-2. Replace the corresponding placeholder in `REORGANIZE_PLAN`.
+- **Root cause of the truncation**: nearly every spec ID differed from the
+  real one by a single `l`/`I` or `0`/`O` character — almost certainly a
+  screenshot-transcription artifact (those glyphs are visually identical in
+  many fonts). Once corrected, 20 of the 21 `REORGANIZE_PLAN` file IDs and
+  all 9 `FOLDER_IDS` folder IDs matched real files/folders exactly or via
+  that single-character fix.
+- **`ROOT`** resolves to a folder actually named "To ChatGPT" — an unrelated
+  name, but confirmed as the real parent of every other canonical folder.
+- **Duplicate folders exist** under Root from what looks like multiple
+  provisioning runs: two extra `01_BENCH_EVIDENCE`, `00_GOVERNING`,
+  `02_PRODUCT_LINE`, and `04_SUPERSEDED` folders sit alongside the ones
+  actually in use. `FOLDER_IDS` is hardcoded to the folder that's actually
+  in use in each case (for `01_BENCH_EVIDENCE`, confirmed by checking which
+  one already contains the `BM-002`–`BM-005` evidence subfolders) — this
+  matters because the old name-lookup fallback would otherwise have picked
+  arbitrarily between duplicates. These extra empty duplicates aren't
+  touched by this tool; clean them up manually if desired.
+- **One entry could not be resolved**: "Partner Update 1" (spec ID
+  `1HK31CCH...`, destined for `AI_REVIEW`). No file matching that ID or
+  description exists anywhere in the Drive tree that was searched. It's
+  left as a placeholder in `REORGANIZE_PLAN` on purpose — `validate_registry()`
+  skips and reports it rather than guessing. If you know which file this
+  should be, add its real ID before running `--reorganize`.
 
-The script won't silently fail on this — `validate_registry()` scans the
-plan up front, prints exactly which entries still look like placeholders,
-skips only those, and runs the rest. `--audit` and `--upload` don't depend
-on this list at all, so they work out of the box.
+`--audit` and `--upload` don't depend on `REORGANIZE_PLAN` at all, so they
+work regardless of the above.
 
 ## Folder resolution
 

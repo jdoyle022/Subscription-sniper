@@ -85,28 +85,40 @@ SCOPES = ["https://www.googleapis.com/auth/drive"]
 
 FOLDER_MIME = "application/vnd.google-apps.folder"
 
-# Canonical folder IDs. Entries set to None are resolved at runtime by name
-# lookup (searched by name directly under ROOT), because no fixed ID was
-# supplied for them.
+# Canonical folder IDs, verified 2026-08-19 against the live Drive tree via
+# the Google_Drive connector (see README.md "ID verification" section for
+# the full audit trail). The IDs originally supplied in the project spec
+# had systematic l/I and 0/O homoglyph typos (almost certainly from a
+# screenshot transcription); every entry below is the corrected, confirmed
+# real ID unless noted otherwise. ROOT itself is a folder literally named
+# "To ChatGPT" — an unrelated name, but confirmed as the true parent of
+# every other canonical folder below.
+#
+# Entries set to None are resolved at runtime by name lookup (searched by
+# name directly under ROOT), because no folder existed to give a fixed ID
+# for (06_DRAWINGS doesn't exist yet, per the reorganize spec).
 FOLDER_IDS = {
-    "ROOT": "1ckNuazhDn4zk6zfBGgEDaLIEtskyDX00",
-    "00_GOVERNING": "1yaeleXk0sQv-Pd4767le85fdV6mFizoC",
-    "01_BENCH_EVIDENCE": None,
-    "02_PRODUCT_LINE": "1Q7D88g15_7ey05g0KVx7M1poKv57mte2",
-    "04_SUPERSEDED": "10eKPySzzLKztuM1-J9Mb-6lv8vJZHDwi",
-    "05_Open_Actions": "1gxPfGXkvBhM-X0E0U12G_L0Ag0GliL6P",
-    "05_SANDBOX": "14YB3Uq-ARVmtp-kK3D3HmSEkP9yOrjPp",
-    "06_DRAWINGS": None,  # created under ROOT on first run if missing
-    "PARTNER_ROOT": "1TGm8cPS5nVE8tuGIMIdNtXfxieqbi_xF",
-    "AI_REVIEW": None,
+    "ROOT": "1ckNuazhDn4zk6zfBGgEDaLlEtskyDX0o",  # was ...DaLIEtskyDX00 (typo)
+    "00_GOVERNING": "1yaeIeXk0sQv-Pd4767le85fdV6mFizoC",  # was 1yaele... (typo)
+    # Two duplicate 01_BENCH_EVIDENCE folders exist under ROOT from prior
+    # provisioning runs; this is the one actually in use (already contains
+    # BM-002..BM-005 subfolders). The other is empty. Hardcoded rather than
+    # left to name-lookup because name-lookup can't disambiguate duplicates.
+    "01_BENCH_EVIDENCE": "1Q0zAVt97KQ4-Z0ipFE3Y2Sw2EAKcWEkC",
+    "02_PRODUCT_LINE": "1Q7D88g15_7ey05g0KVx7M1poKv57mte2",  # matched spec exactly
+    "04_SUPERSEDED": "1OeKPySzzLKztuM1-J9Mb-6lv8vJZHDwi",  # was 10eKPy... (typo)
+    "05_Open_Actions": "1gxPfGXkvBhM-X0E0U12G_L0Ag0GIiL6P",  # was ...G0GliL6P (typo)
+    "05_SANDBOX": "14YB3Uq-ARVmtp-kK3D3HmSEkP9yOrjPp",  # matched spec exactly
+    "06_DRAWINGS": None,  # does not exist yet; created under ROOT on first run
+    "PARTNER_ROOT": "1TGm8cPS5nVE8tuGIMldNtXfxieqbi_xF",  # was ...GIMIdNt... (typo)
+    "AI_REVIEW": "15K-HNfZpp1s1v1oG92Rz0vn3E2M5btRE",  # unique match, hardcoded
 }
 
 # Folders that are resolved by name (rather than a fixed ID) and the name to
-# search/create under ROOT.
+# search/create under ROOT. Only 06_DRAWINGS needs this now — the others
+# were resolved to a fixed ID above (see comments on FOLDER_IDS).
 NAME_RESOLVED_FOLDERS = {
-    "01_BENCH_EVIDENCE": "01_BENCH_EVIDENCE",
     "06_DRAWINGS": "06_DRAWINGS",
-    "AI_REVIEW": "AI_REVIEW",
 }
 
 
@@ -118,42 +130,48 @@ class MoveOp:
     expected_source_key: Optional[str] = None  # documentation only; not enforced
 
 
-# NOTE: The file IDs below were supplied as truncated examples in the project
-# spec (e.g. "17BFKDQB..."). Google Drive file IDs are fixed-length opaque
-# strings — a truncated value will simply 404 against the API. Before running
-# `--reorganize` for real, replace every entry below with the *full* file ID
-# copied from that file's Drive share link
-# (drive.google.com/file/d/<FULL_ID_HERE>/view). `validate_registry()` will
-# refuse to run destructive operations while placeholder-looking IDs remain,
-# and will print exactly which entries still need fixing.
+# File IDs verified 2026-08-19 against the live Drive tree via the
+# Google_Drive connector, by searching each title/keyword from the spec
+# under the relevant parent folder and cross-checking the result against
+# the (typo-corrected) ID the spec supplied. Every entry below is a
+# confirmed real file except "Partner Update 2": no file matching that
+# description or ID could be found anywhere in the Drive tree (see
+# README.md "ID verification" section) — it's left as an unresolved
+# placeholder on purpose so validate_registry() skips it and reports it,
+# rather than silently guessing.
 REORGANIZE_PLAN: list[MoveOp] = [
     # --- Loose governance docs: ROOT -> 00_GOVERNING ---
-    MoveOp("17BFKDQB...", "SPADR", "00_GOVERNING", "ROOT"),
-    MoveOp("1g8UYcqz...", "Pin Matrix", "00_GOVERNING", "ROOT"),
-    MoveOp("112GHqlI...", "Requirements Matrix", "00_GOVERNING", "ROOT"),
-    MoveOp("1IKm8qJD...", "Appendix G", "00_GOVERNING", "ROOT"),
-    MoveOp("1QJg24E2...", "Engineering Pack OA005", "00_GOVERNING", "ROOT"),
-    MoveOp("14_ZbFFa...", "EPP Issue 2", "00_GOVERNING", "ROOT"),
-    MoveOp("1c_mbPwKE...", "CDR Bundle", "00_GOVERNING", "ROOT"),
+    MoveOp("17BFKDQBHDVcU_fD6RV2kug0z4HgFzGiQ", "SPADR (Sensor Payload Allocation Decision Record)", "00_GOVERNING", "ROOT"),
+    MoveOp("1g8UYcqzBoq31502CoKhV2kOAX9L1Ps69", "Pin Matrix & Open Actions", "00_GOVERNING", "ROOT"),
+    MoveOp("112GHqllMqvblWEgqgpIYD0eiOi-qhLiy", "Requirements Matrix (System Requirements & Acceptance Matrix)", "00_GOVERNING", "ROOT"),
+    MoveOp("1IKm8qJDRotXX45oZkf0mOr8QplqW5eX1", "Appendix G Decision Record", "00_GOVERNING", "ROOT"),
+    MoveOp("1QJg24E2PYqb2Gb7D547q2nBwwUpNvD8C", "Engineering Pack OA005 Propagation Update", "00_GOVERNING", "ROOT"),
+    MoveOp("14_ZbFFaEsAw9AmCuGquMZPf75zpIFhUI", "EPP Issue 2 (Evidence & Propagation Package, Corrected Issue 2)", "00_GOVERNING", "ROOT"),
+    MoveOp("1c_mbPwKEdbrIvjjMjd2vyw6-ZYHgCcjO", "CDR Bundle (Controlled Decision Record Bundle)", "00_GOVERNING", "ROOT"),
     # --- Root duplicates: ROOT -> 04_SUPERSEDED ---
-    MoveOp("1WEldzIn...", "Duplicate Requirements Matrix", "04_SUPERSEDED", "ROOT"),
-    MoveOp("1951kJb6...", "Duplicate EPP Issue 2", "04_SUPERSEDED", "ROOT"),
+    # Earlier-created copy of the same Requirements Matrix doc kept at ROOT.
+    MoveOp("1WEHzZIn1Wf2gcogbgE-fy324auZXxj_r", "Duplicate Requirements Matrix", "04_SUPERSEDED", "ROOT"),
+    # Earlier-created copy of the same EPP Issue 2 doc kept at ROOT.
+    MoveOp("195IkJb6KWsYSu63RLrU0lJ9IrnZOPKY7", "Duplicate EPP Issue 2", "04_SUPERSEDED", "ROOT"),
     # --- Stale OA / binder docs: 00_GOVERNING -> 04_SUPERSEDED ---
-    MoveOp("1fLbdvAP...", "OA-012", "04_SUPERSEDED", "00_GOVERNING"),
-    MoveOp("1nkGGolf...", "OA-013", "04_SUPERSEDED", "00_GOVERNING"),
-    MoveOp("1wbONDsg...", "OA-008", "04_SUPERSEDED", "00_GOVERNING"),
-    MoveOp("1_jA7p8m...", "OA-010", "04_SUPERSEDED", "00_GOVERNING"),
-    MoveOp("1cwc6old...", "OA-011", "04_SUPERSEDED", "00_GOVERNING"),
-    MoveOp("19JGJaRI...", "Master Program Binder 20260403", "04_SUPERSEDED", "00_GOVERNING"),
-    MoveOp("13NIHIEW...", "Drive Folder Plan", "04_SUPERSEDED", "00_GOVERNING"),
+    MoveOp("1fLbdvAP7Z1lI-I5Yhi9lKsacmxNoNs4t", "OA-012 (IP67 Enclosure Design)", "04_SUPERSEDED", "00_GOVERNING"),
+    MoveOp("1nkGGolfMkmga3koi96MMaEwiN0IYAKB_", "OA-013 (Power Architecture: Solar Surplus Design Intent)", "04_SUPERSEDED", "00_GOVERNING"),
+    MoveOp("1wbONDsguS1ED6Tpp5JgA0jMK38vJjfMq", "OA-008 (LiDAR Trade Study Rev3)", "04_SUPERSEDED", "00_GOVERNING"),
+    MoveOp("1_jA7p8mjgnF1r8f1njfnVkN1blnKPmn7", "OA-010 (Node Handoff Protocol)", "04_SUPERSEDED", "00_GOVERNING"),
+    MoveOp("1cwc6oIdCq_il8VO3lf3VIrxZ3wPyWfGR", "OA-011 (LR-FHSS Radio Architecture Rev2)", "04_SUPERSEDED", "00_GOVERNING"),
+    MoveOp("19JGJaRIejN8m69Ui-LIeQT0xxATKp4TZ", "Master Program Binder 20260403", "04_SUPERSEDED", "00_GOVERNING"),
+    MoveOp("13NiHIEWMa2A4hpAw0hdTQ2snVQumIdvz", "Drive Folder Plan", "04_SUPERSEDED", "00_GOVERNING"),
     # --- Partner continuity report -> Partner Root ---
-    MoveOp("1cBokW4X...", "Partner_Continuity_Report", "PARTNER_ROOT", None),
+    MoveOp("1cBokW4XHBtWYudvMo1c5koDXiZ3vmTRZ", "Partner_Continuity_Report_20260429", "PARTNER_ROOT", "00_GOVERNING"),
     # --- Closed CTO memos: 05_Open_Actions -> 01_BENCH_EVIDENCE ---
-    MoveOp("1tYYImVJ...", "Closed CTO Memo 1", "01_BENCH_EVIDENCE", "05_Open_Actions"),
-    MoveOp("1cKOdu3D...", "Closed CTO Memo 2", "01_BENCH_EVIDENCE", "05_Open_Actions"),
+    MoveOp("1tYYImVJhChyfiTeT6VImg6_JkppO-Rs_", "CTO Memo BM-004 (LD2410C Serial Validation) - CLOSED", "01_BENCH_EVIDENCE", "05_Open_Actions"),
+    MoveOp("1cKOdu3DKpVn1qAIfDq1cIW9gWXE0QEHp", "CTO Memo BM-005 (ESP32-C3 Sensor-Packet Translation) - CLOSED", "01_BENCH_EVIDENCE", "05_Open_Actions"),
     # --- Partner updates -> AI_REVIEW ---
-    MoveOp("1HK31CCH...", "Partner Update 1", "AI_REVIEW", None),
-    MoveOp("1BxA3qas...", "Partner Update 2", "AI_REVIEW", None),
+    # UNRESOLVED: no file matching this ID/description was found anywhere
+    # in the Drive tree during verification. Left as a placeholder on
+    # purpose so this entry is skipped (and reported) rather than guessed.
+    MoveOp("1HK31CCH...", "Partner Update 1 (UNRESOLVED - could not locate; verify with user)", "AI_REVIEW", None),
+    MoveOp("1BxA3qasBL8_FRiysGVgTFQhoEykOluIJ", "Partner Update 2 (All-Partner Update 20260506)", "AI_REVIEW", "ROOT"),
 ]
 
 # --------------------------------------------------------------------------

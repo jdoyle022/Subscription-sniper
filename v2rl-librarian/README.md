@@ -153,7 +153,9 @@ ever does expire or get revoked, redo step 1 and update the
 New documents shouldn't reach the automated filer until ChatGPT has
 reviewed them — the actual V2RETROLINK documents already carry an
 "@ ChatGPT — Peer Reviewer" convention, this just formalizes it with
-folders instead of ad hoc requests.
+folders instead of ad hoc requests. ChatGPT has its own Drive/Workspace
+connector with write access, so it does the promotion itself — no human
+has to manually drag files.
 
 - **`00_INBOX/_PENDING_REVIEW`** (`1sBmr0ngEb0EuilP6gMY-hS5YfeSyMDbl`) is
   the staging area. New drafts land here — Claude is instructed (see this
@@ -163,17 +165,58 @@ folders instead of ad hoc requests.
   subfolders.** A file sitting in `_PENDING_REVIEW` is invisible to it —
   that's the gate. Nothing gets auto-filed until it's promoted (moved) out
   of staging and into `00_INBOX` proper.
-- **Promotion today is manual**: once ChatGPT has reviewed a draft and it's
-  approved, move the file from `_PENDING_REVIEW` to `00_INBOX` in Drive
-  (drag-and-drop, or ask Claude to do it via its Drive access). The next
-  scheduled `--file-inbox` run (or a manual one) files it from there.
+- **ChatGPT does the promotion.** Give it the handoff brief below once (it
+  has no memory of this repo otherwise). On each pass it should:
+  - **Approve** → move the file from `_PENDING_REVIEW` to `00_INBOX`
+    (`1HIhFeG8AK1-7Nu0PAMjGbIZ-ycltHLCu`) using its own Drive write access.
+    The next scheduled `--file-inbox` run files it from there — ChatGPT
+    never needs canonical-folder IDs, just the two inbox-level ones.
+  - **Reject / needs revision** → leave the original file in
+    `_PENDING_REVIEW` (don't move or delete it) and add a companion file
+    named `<original-name>_REVIEW_NOTES.md` in the same folder explaining
+    what needs fixing. Claude picks this up, revises, and re-uploads.
+  - Never delete anything — approve by moving, reject by leaving a note.
+- **Revision cycles**: if Claude re-uploads a revised version, it replaces
+  the prior draft of that same document in `_PENDING_REVIEW` (and removes
+  the stale `_REVIEW_NOTES.md` once addressed) rather than piling up
+  multiple drafts of the same doc.
 
-This is intentionally the simplest version that works. It doesn't
-currently automate the review step itself — ChatGPT isn't wired into this
-pipeline programmatically, so a human decides when something's approved
-and does the promotion. If ChatGPT ever gets its own Drive write access,
-or a scripted way to flag approval, promotion could become another
-scheduled/triggered step instead of a manual one.
+### Handoff brief for ChatGPT
+
+Paste this into a ChatGPT conversation with Drive access to set it up as
+peer reviewer:
+
+```
+You are the peer reviewer for the V2RETROLINK engineering project's
+document pipeline. Read v2rl-librarian/README.md and CLAUDE.md in the
+GitHub repo jdoyle022/subscription-sniper (branch
+claude/v2retrolink-drive-librarian-tpns9w) for full context before your
+first pass -- this brief is a summary, not the whole picture.
+
+YOUR JOB
+Periodically (or when asked), check the Drive folder
+00_INBOX/_PENDING_REVIEW (ID: 1sBmr0ngEb0EuilP6gMY-hS5YfeSyMDbl) for new
+or revised V2RETROLINK documents Claude has staged there. For each file:
+
+1. Review it against the governing document set (00_GOVERNING, ID:
+   1yaeIeXk0sQv-Pd4767le85fdV6mFizoC) for consistency -- the same kind of
+   check the "@ ChatGPT -- Peer Reviewer" sections in existing V2RETROLINK
+   documents already ask you to do.
+2. If it passes: move the file from _PENDING_REVIEW into 00_INBOX (ID:
+   1HIhFeG8AK1-7Nu0PAMjGbIZ-ycltHLCu) using your Drive write access. That's
+   the entire approval action -- a scheduled job picks it up from there and
+   files it into the correct canonical folder automatically. Do not put
+   anything directly into 00_GOVERNING or any other canonical folder
+   yourself.
+3. If it needs work: leave the original file in _PENDING_REVIEW untouched,
+   and add a new file next to it named "<original-filename>_REVIEW_NOTES.md"
+   explaining what needs to change. Do not delete or edit the original.
+4. Never delete any file in this pipeline.
+
+Report back (to whoever is watching this chat) what you approved and what
+you sent back for revision, so they know the state without checking Drive
+themselves.
+```
 
 ## Upload routing rules
 

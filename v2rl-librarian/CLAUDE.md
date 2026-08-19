@@ -20,9 +20,17 @@ than only leaving the document in chat or in local files:
    review gate, not an accident to work around.
 
 2. **Say so explicitly to the user** — name the file and note it's staged
-   for ChatGPT peer review, not yet filed. Don't promote it to `00_INBOX`
-   yourself unless the user tells you review is complete (see README.md's
-   "ChatGPT peer-review gate" section for the current promotion mechanism).
+   for ChatGPT peer review, not yet filed. ChatGPT has its own Drive write
+   access and promotes approved files to `00_INBOX` itself (see README.md's
+   "ChatGPT peer-review gate" section) — don't promote a file to `00_INBOX`
+   yourself; that's the reviewer's action, not yours.
+
+2a. **Check for a `<filename>_REVIEW_NOTES.md` file** next to anything you
+   staged earlier, before assuming it's still pending. If one exists,
+   ChatGPT sent that draft back for revision — read the notes, fix the
+   document, re-upload the revised version to `_PENDING_REVIEW` in place
+   of the old draft (don't leave both versions sitting there), and delete
+   the now-addressed `_REVIEW_NOTES.md` file.
 
 3. **Never write directly into a canonical folder** (`00_GOVERNING`,
    `04_SUPERSEDED`, etc.) for a newly-generated document. Filing into those

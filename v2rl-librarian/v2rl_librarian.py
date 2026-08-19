@@ -109,7 +109,7 @@ FOLDER_IDS = {
     "04_SUPERSEDED": "1OeKPySzzLKztuM1-J9Mb-6lv8vJZHDwi",  # was 10eKPy... (typo)
     "05_Open_Actions": "1gxPfGXkvBhM-X0E0U12G_L0Ag0GIiL6P",  # was ...G0GliL6P (typo)
     "05_SANDBOX": "14YB3Uq-ARVmtp-kK3D3HmSEkP9yOrjPp",  # matched spec exactly
-    "06_DRAWINGS": None,  # does not exist yet; created under ROOT on first run
+    "06_DRAWINGS": "1VNawdbwFgKnEcDR5BDRA1SrFAf_JIBo2",  # created 2026-08-19 under ROOT
     "PARTNER_ROOT": "1TGm8cPS5nVE8tuGIMldNtXfxieqbi_xF",  # was ...GIMIdNt... (typo)
     "AI_REVIEW": "15K-HNfZpp1s1v1oG92Rz0vn3E2M5btRE",  # unique match, hardcoded
 }

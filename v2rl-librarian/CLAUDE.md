@@ -25,6 +25,20 @@ than only leaving the document in chat or in local files:
    "ChatGPT peer-review gate" section) — don't promote a file to `00_INBOX`
    yourself; that's the reviewer's action, not yours.
 
+2b. **Every file you stage must come with clear instructions for the
+   partners** (ChatGPT reviewing, Gemini auditing) — never drop a bare file
+   into `_PENDING_REVIEW` and assume intent is obvious. For a single file,
+   put a short instructions block at the top of the document itself (or a
+   `<filename>_INSTRUCTIONS.md` companion if you can't edit the document's
+   content). For a batch, one shared context file covering the whole batch
+   is fine (see `_BUNDLE_REVIEW_CONTEXT_*.md` for the pattern) — but every
+   file in the batch still needs to be individually addressed in it: what
+   it is, what's already been checked, what the reviewer should verify, and
+   what the expected outcome is (approve-and-promote vs. something that
+   needs a decision). Silence is not an instruction — if you don't know
+   what a partner should do with a file, say what you don't know rather
+   than omitting guidance entirely.
+
 2a. **Check for a `<filename>_REVIEW_NOTES.md` file** next to anything you
    staged earlier, before assuming it's still pending. If one exists,
    ChatGPT sent that draft back for revision — read the notes, fix the

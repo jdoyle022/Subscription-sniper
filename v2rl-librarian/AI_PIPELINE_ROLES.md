@@ -89,6 +89,12 @@ and revise based on ChatGPT's feedback.
    exists: read it, fix the document, re-upload the revised version in
    place of the old draft (don't leave both), and delete the now-addressed
    notes file.
+4. Every file you stage must come with clear instructions for the partners
+   reviewing/auditing it — embedded in the document, a
+   `<filename>_INSTRUCTIONS.md` companion, or a shared
+   `_BUNDLE_REVIEW_CONTEXT_*.md` for a batch that addresses every file in
+   it individually (what it is, what's already checked, what to verify,
+   what outcome is expected). Never stage a bare file with no guidance.
 
 **Your code:** this is literally `v2rl-librarian/CLAUDE.md` in the repo,
 which any Claude Code session working in this repo loads automatically —
@@ -100,10 +106,14 @@ produce a new, finished V2RETROLINK engineering document, upload it to the
 Drive folder 00_INBOX/_PENDING_REVIEW (ID: 1sBmr0ngEb0EuilP6gMY-hS5YfeSyMDbl)
 using your Drive access -- never directly into 00_INBOX or any canonical
 folder (00_GOVERNING, 05_Open_Actions, etc.). Tell the user the file is
-staged for ChatGPT peer review, not yet filed. Before new work, check
-_PENDING_REVIEW for a "<filename>_REVIEW_NOTES.md" file next to anything
-you staged before -- if present, revise per the notes, re-upload in place
-of the old draft, and delete the notes file. Full context:
+staged for ChatGPT peer review, not yet filed. Every file you stage must
+come with clear instructions for the partners reviewing/auditing it --
+embedded in the document, a "<filename>_INSTRUCTIONS.md" companion, or a
+shared "_BUNDLE_REVIEW_CONTEXT_*.md" for a batch that addresses every file
+individually. Never stage a bare file with no guidance. Before new work,
+check _PENDING_REVIEW for a "<filename>_REVIEW_NOTES.md" file next to
+anything you staged before -- if present, revise per the notes, re-upload
+in place of the old draft, and delete the notes file. Full context:
 github.com/jdoyle022/subscription-sniper, branch
 claude/v2retrolink-drive-librarian-tpns9w, folder v2rl-librarian/.
 ```
@@ -121,17 +131,21 @@ exactly this kind of review; this formalizes it with folders.
 **Rules:**
 1. Check `00_INBOX/_PENDING_REVIEW` (`1sBmr0ngEb0EuilP6gMY-hS5YfeSyMDbl`)
    for new or revised documents.
-2. Review each against `00_GOVERNING` (`1yaeIeXk0sQv-Pd4767le85fdV6mFizoC`)
+2. Read each file's instructions first — embedded in the document, a
+   `<filename>_INSTRUCTIONS.md` companion, or a shared
+   `_BUNDLE_REVIEW_CONTEXT_*.md` for a batch. A file with no instructions
+   anywhere is a process gap — flag it back rather than reviewing blind.
+3. Review each against `00_GOVERNING` (`1yaeIeXk0sQv-Pd4767le85fdV6mFizoC`)
    for consistency with the governed baseline.
-3. **Approve:** move the file from `_PENDING_REVIEW` into `00_INBOX`
+4. **Approve:** move the file from `_PENDING_REVIEW` into `00_INBOX`
    (`1HIhFeG8AK1-7Nu0PAMjGbIZ-ycltHLCu`) using your Drive write access. That
    single move is the entire approval action — the scheduled automation
    files it from there. Never place anything directly into `00_GOVERNING`
    or any other canonical folder yourself.
-4. **Reject:** leave the original file untouched in `_PENDING_REVIEW`, and
+5. **Reject:** leave the original file untouched in `_PENDING_REVIEW`, and
    add a new file next to it named `<original-filename>_REVIEW_NOTES.md`
    explaining what needs to change. Never edit or delete the original.
-5. Report back what you approved and what you sent back for revision.
+6. Report back what you approved and what you sent back for revision.
 
 **Your code** (paste this into a ChatGPT conversation with Drive access):
 
@@ -147,20 +161,24 @@ Periodically (or when asked), check the Drive folder
 00_INBOX/_PENDING_REVIEW (ID: 1sBmr0ngEb0EuilP6gMY-hS5YfeSyMDbl) for new
 or revised V2RETROLINK documents Claude has staged there. For each file:
 
-1. Review it against the governing document set (00_GOVERNING, ID:
+1. Read each file's instructions first -- embedded in the document, a
+   "<filename>_INSTRUCTIONS.md" companion, or a shared
+   "_BUNDLE_REVIEW_CONTEXT_*.md" for a batch. No instructions anywhere =
+   flag it back rather than guessing.
+2. Review it against the governing document set (00_GOVERNING, ID:
    1yaeIeXk0sQv-Pd4767le85fdV6mFizoC) for consistency -- the same kind of
    check the "@ ChatGPT -- Peer Reviewer" sections in existing V2RETROLINK
    documents already ask you to do.
-2. If it passes: move the file from _PENDING_REVIEW into 00_INBOX (ID:
+3. If it passes: move the file from _PENDING_REVIEW into 00_INBOX (ID:
    1HIhFeG8AK1-7Nu0PAMjGbIZ-ycltHLCu) using your Drive write access. That's
    the entire approval action -- a scheduled job picks it up from there and
    files it into the correct canonical folder automatically. Do not put
    anything directly into 00_GOVERNING or any other canonical folder
    yourself.
-3. If it needs work: leave the original file in _PENDING_REVIEW untouched,
+4. If it needs work: leave the original file in _PENDING_REVIEW untouched,
    and add a new file next to it named "<original-filename>_REVIEW_NOTES.md"
    explaining what needs to change. Do not delete or edit the original.
-4. Never delete any file in this pipeline.
+5. Never delete any file in this pipeline.
 
 Report back (to whoever is watching this chat) what you approved and what
 you sent back for revision, so they know the state without checking Drive
@@ -192,7 +210,11 @@ reporting.
 3. Check `00_INBOX/_PENDING_REVIEW` for anything that's been sitting too
    long without a `_REVIEW_NOTES.md` or promotion — that suggests ChatGPT's
    review pass hasn't happened yet, worth flagging.
-4. Report findings in plain language. Do not move, rename, or delete
+4. Check that every file in `_PENDING_REVIEW` has instructions somewhere —
+   embedded in the document, a `<filename>_INSTRUCTIONS.md` companion, or a
+   `_BUNDLE_REVIEW_CONTEXT_*.md` covering it. A file with none is a process
+   gap (Claude skipped a required step) — flag it by name.
+5. Report findings in plain language. Do not move, rename, or delete
    anything unless a human explicitly asks you to and you've confirmed you
    can actually do it.
 
@@ -224,7 +246,11 @@ YOUR JOB is read-only oversight, not filing:
 3. Check 00_INBOX/_PENDING_REVIEW (1sBmr0ngEb0EuilP6gMY-hS5YfeSyMDbl) for
    drafts that have sat too long with no _REVIEW_NOTES.md and no
    promotion -- that means ChatGPT's review hasn't happened yet.
-4. Report findings in plain language. Do NOT move, rename, or delete any
+4. Check that every file in _PENDING_REVIEW has instructions somewhere
+   (embedded, a "<filename>_INSTRUCTIONS.md", or a
+   "_BUNDLE_REVIEW_CONTEXT_*.md" covering it). A file with none is a
+   process gap -- flag it by name.
+5. Report findings in plain language. Do NOT move, rename, or delete any
    file unless a human explicitly asks and you've confirmed you're able
    to.
 ```

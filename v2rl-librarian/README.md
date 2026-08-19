@@ -180,6 +180,12 @@ has to manually drag files.
   the prior draft of that same document in `_PENDING_REVIEW` (and removes
   the stale `_REVIEW_NOTES.md` once addressed) rather than piling up
   multiple drafts of the same doc.
+- **Every staged file comes with instructions.** Claude never drops a bare
+  file into `_PENDING_REVIEW` — either the document itself carries an
+  instructions block, or there's a `<filename>_INSTRUCTIONS.md` companion,
+  or (for a batch) a shared `_BUNDLE_REVIEW_CONTEXT_*.md` covering every
+  file in it individually. If ChatGPT finds a file with no instructions
+  anywhere, that's a process gap — flag it rather than guessing intent.
 
 ### Handoff brief for ChatGPT
 
@@ -198,20 +204,24 @@ Periodically (or when asked), check the Drive folder
 00_INBOX/_PENDING_REVIEW (ID: 1sBmr0ngEb0EuilP6gMY-hS5YfeSyMDbl) for new
 or revised V2RETROLINK documents Claude has staged there. For each file:
 
-1. Review it against the governing document set (00_GOVERNING, ID:
+1. Read the instructions that come with each file first -- either embedded
+   in the document, a "<filename>_INSTRUCTIONS.md" companion, or a shared
+   "_BUNDLE_REVIEW_CONTEXT_*.md" for a batch. If a file has none anywhere,
+   don't guess -- flag it back rather than review blind.
+2. Review it against the governing document set (00_GOVERNING, ID:
    1yaeIeXk0sQv-Pd4767le85fdV6mFizoC) for consistency -- the same kind of
    check the "@ ChatGPT -- Peer Reviewer" sections in existing V2RETROLINK
    documents already ask you to do.
-2. If it passes: move the file from _PENDING_REVIEW into 00_INBOX (ID:
+3. If it passes: move the file from _PENDING_REVIEW into 00_INBOX (ID:
    1HIhFeG8AK1-7Nu0PAMjGbIZ-ycltHLCu) using your Drive write access. That's
    the entire approval action -- a scheduled job picks it up from there and
    files it into the correct canonical folder automatically. Do not put
    anything directly into 00_GOVERNING or any other canonical folder
    yourself.
-3. If it needs work: leave the original file in _PENDING_REVIEW untouched,
+4. If it needs work: leave the original file in _PENDING_REVIEW untouched,
    and add a new file next to it named "<original-filename>_REVIEW_NOTES.md"
    explaining what needs to change. Do not delete or edit the original.
-4. Never delete any file in this pipeline.
+5. Never delete any file in this pipeline.
 
 Report back (to whoever is watching this chat) what you approved and what
 you sent back for revision, so they know the state without checking Drive

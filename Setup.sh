@@ -1,7 +1,10 @@
 #!/bin/bash
 set -e
 APP=/opt/subscription-sniper
+SRC_DIR="$(cd "$(dirname "$0")" && pwd)"
 mkdir -p $APP/src/{scripts/services,queue,utils} $APP/public
+cp "$SRC_DIR/Adobe.js" $APP/src/scripts/services/adobe.js
+echo "✓ adobe.js copied"
 JWT=$(node -e "console.log(require('crypto').randomBytes(64).toString('hex'))")
 ENC=$(node -e "console.log(require('crypto').randomBytes(16).toString('hex'))")
 cat > $APP/.env << ENVEOF
@@ -59,7 +62,7 @@ const fs=require('fs');
 async function screenshot(page,label){try{const dir=path.join(__dirname,'../../screenshots');if(!fs.existsSync(dir))fs.mkdirSync(dir,{recursive:true});const file=path.join(dir,`${Date.now()}-${label}.png`);await page.screenshot({path:file});return file;}catch{return null;}}
 async function launchBrowser(){return chromium.launch({headless:true,args:['--no-sandbox','--disable-setuid-sandbox','--disable-dev-shm-usage','--disable-gpu']});}
 async function runCancellation(service,credentials,job){
-const scripts={'netflix':require('./services/netflix'),'spotify':require('./services/spotify'),'hulu':require('./services/hulu'),'disney+':require('./services/disney'),'duolingo':require('./services/duolingo'),'nordvpn':require('./services/nordvpn'),'dropbox':require('./services/dropbox'),'notion':require('./services/notion'),'grammarly':require('./services/grammarly'),'canva':require('./services/canva')};
+const scripts={'netflix':require('./services/netflix'),'spotify':require('./services/spotify'),'adobe':require('./services/adobe'),'hulu':require('./services/hulu'),'disney+':require('./services/disney'),'duolingo':require('./services/duolingo'),'nordvpn':require('./services/nordvpn'),'dropbox':require('./services/dropbox'),'notion':require('./services/notion'),'grammarly':require('./services/grammarly'),'canva':require('./services/canva')};
 const script=scripts[service];
 if(!script)return{success:false,manual:true,message:`No script for ${service} yet — cancel manually.`};
 if(!credentials?.email||!credentials?.password)return{success:false,message:`Credentials required for ${service}.`};
@@ -106,12 +109,358 @@ return{success:true,message:'Spotify Premium cancelled. Reverts to free plan.'};
 module.exports={cancel};
 SPEOF
 
-for svc in hulu disney duolingo nordvpn dropbox notion grammarly canva; do
-cat > $APP/src/scripts/services/$svc.js << STEOF
-async function cancel(page,c,ss){return{success:false,manual:true,message:'Script for $svc coming soon. Please cancel manually.'};}
+cat > $APP/src/scripts/services/hulu.js << 'HUEOF'
+async function cancel(page,c,ss){
+try{
+await page.goto('https://auth.hulu.com/web/login',{waitUntil:'domcontentloaded',timeout:20000});
+await ss(page,'hulu-01-login');
+const email=await page.waitForSelector('input[name=email],input[type=email]',{timeout:10000});
+await email.fill(c.email);
+const pw=await page.waitForSelector('input[name=password],input[type=password]',{timeout:10000});
+await pw.fill(c.password);
+await ss(page,'hulu-02-filled');
+const loginBtn=await page.waitForSelector('button[type=submit],button:has-text("Log In")',{timeout:8000});
+await loginBtn.click();
+await page.waitForTimeout(3000);
+await ss(page,'hulu-03-signed-in');
+if(page.url().includes('login')){
+const err=await page.$('.LoginErrorMessage,[data-automationid=error-message]');
+return{success:false,message:err?'Hulu login failed: '+(await err.textContent()).trim():'Hulu login failed. Check credentials or complete any verification manually.'};
+}
+await page.goto('https://secure.hulu.com/account',{waitUntil:'domcontentloaded',timeout:20000});
+await ss(page,'hulu-04-account');
+const cancelLink=await page.waitForSelector('a:has-text("Cancel"),button:has-text("Cancel")',{timeout:12000});
+await cancelLink.click();
+await page.waitForTimeout(2000);
+await ss(page,'hulu-05-cancel-offer');
+try{
+const declineOffer=await page.waitForSelector('button:has-text("Continue to Cancel"),a:has-text("No thanks"),button:has-text("No Thanks")',{timeout:8000});
+await declineOffer.click();
+await page.waitForTimeout(2000);
+}catch(e){}
+await ss(page,'hulu-06-confirm-screen');
+const confirmBtn=await page.waitForSelector('button:has-text("Cancel Subscription"),button:has-text("Confirm Cancellation"),button:has-text("Yes, Cancel")',{timeout:10000});
+await confirmBtn.click();
+await page.waitForTimeout(3000);
+await ss(page,'hulu-07-done');
+return{success:true,message:'Hulu subscription cancelled. Access continues until end of your billing period. Check your email for Hulu confirmation.'};
+}catch(err){throw new Error('Hulu script error: '+err.message);}
+}
 module.exports={cancel};
-STEOF
-done
+HUEOF
+echo "✓ hulu.js done"
+
+cat > $APP/src/scripts/services/disney.js << 'DPEOF'
+async function cancel(page,c,ss){
+try{
+await page.goto('https://www.disneyplus.com/login',{waitUntil:'domcontentloaded',timeout:20000});
+await ss(page,'disney-01-login');
+const email=await page.waitForSelector('input[type=email],input[name=email]',{timeout:10000});
+await email.fill(c.email);
+const cont=await page.waitForSelector('button[type=submit],button:has-text("Continue")',{timeout:8000});
+await cont.click();
+await page.waitForTimeout(1500);
+const pw=await page.waitForSelector('input[type=password]',{timeout:10000});
+await pw.fill(c.password);
+await ss(page,'disney-02-password');
+const signIn=await page.waitForSelector('button[type=submit],button:has-text("Log In")',{timeout:8000});
+await signIn.click();
+await page.waitForTimeout(3000);
+await ss(page,'disney-03-signed-in');
+if(page.url().includes('login')){
+const err=await page.$('[data-testid=error-message],.field-error');
+return{success:false,message:err?'Disney+ login failed: '+(await err.textContent()).trim():'Disney+ login failed. Check credentials or complete any verification manually.'};
+}
+await page.goto('https://www.disneyplus.com/account',{waitUntil:'domcontentloaded',timeout:20000});
+await ss(page,'disney-04-account');
+const cancelLink=await page.waitForSelector('a:has-text("Cancel Subscription"),button:has-text("Cancel Subscription")',{timeout:12000});
+await cancelLink.click();
+await page.waitForTimeout(2000);
+await ss(page,'disney-05-cancel-flow');
+try{
+const reason=await page.$('input[type=radio],[role=radio]');
+if(reason){await reason.click();await page.waitForTimeout(500);}
+const next=await page.waitForSelector('button:has-text("Continue"),button:has-text("Next")',{timeout:6000});
+await next.click();
+await page.waitForTimeout(2000);
+}catch(e){}
+await ss(page,'disney-06-confirm-screen');
+const confirmBtn=await page.waitForSelector('button:has-text("Complete Cancellation"),button:has-text("Cancel Subscription"),button:has-text("Confirm")',{timeout:10000});
+await confirmBtn.click();
+await page.waitForTimeout(3000);
+await ss(page,'disney-07-done');
+return{success:true,message:'Disney+ subscription cancelled. Access continues until end of your billing period. Check your email for Disney+ confirmation.'};
+}catch(err){throw new Error('Disney+ script error: '+err.message);}
+}
+module.exports={cancel};
+DPEOF
+echo "✓ disney.js done"
+
+cat > $APP/src/scripts/services/duolingo.js << 'DUEOF'
+async function cancel(page,c,ss){
+try{
+await page.goto('https://www.duolingo.com/log-in',{waitUntil:'domcontentloaded',timeout:20000});
+await ss(page,'duolingo-01-login');
+const idField=await page.waitForSelector('input[data-test="login-username"],input[name=identifier],input[type=email]',{timeout:10000});
+await idField.fill(c.email);
+const pwField=await page.waitForSelector('input[data-test="login-password"],input[type=password]',{timeout:10000});
+await pwField.fill(c.password);
+await ss(page,'duolingo-02-filled');
+const loginBtn=await page.waitForSelector('button[data-test="register-button"],button:has-text("Log in")',{timeout:8000});
+await loginBtn.click();
+await page.waitForTimeout(3000);
+await ss(page,'duolingo-03-signed-in');
+if(page.url().includes('log-in')){
+const err=await page.$('[data-test="login-form-error"],.error');
+return{success:false,message:err?'Duolingo login failed: '+(await err.textContent()).trim():'Duolingo login failed. Check credentials or complete any verification manually.'};
+}
+await page.goto('https://www.duolingo.com/settings/subscription',{waitUntil:'domcontentloaded',timeout:20000});
+await ss(page,'duolingo-04-subscription');
+const cancelBtn=await page.waitForSelector('button:has-text("End subscription"),button:has-text("Cancel plan"),button:has-text("Cancel Super")',{timeout:12000});
+await cancelBtn.click();
+await page.waitForTimeout(2000);
+await ss(page,'duolingo-05-cancel-flow');
+try{
+const skip=await page.waitForSelector('button:has-text("Continue to cancel"),button:has-text("No thanks")',{timeout:6000});
+await skip.click();
+await page.waitForTimeout(2000);
+}catch(e){}
+await ss(page,'duolingo-06-confirm-screen');
+const confirmBtn=await page.waitForSelector('button:has-text("End subscription"),button:has-text("Yes, cancel"),button:has-text("Confirm")',{timeout:10000});
+await confirmBtn.click();
+await page.waitForTimeout(3000);
+await ss(page,'duolingo-07-done');
+return{success:true,message:'Duolingo subscription cancelled. Access continues until end of your billing period. Check your email for Duolingo confirmation.'};
+}catch(err){throw new Error('Duolingo script error: '+err.message);}
+}
+module.exports={cancel};
+DUEOF
+echo "✓ duolingo.js done"
+
+cat > $APP/src/scripts/services/nordvpn.js << 'NVEOF'
+async function cancel(page,c,ss){
+try{
+await page.goto('https://my.nordaccount.com/login/',{waitUntil:'domcontentloaded',timeout:20000});
+await ss(page,'nordvpn-01-login');
+const email=await page.waitForSelector('input[name=username],input[type=email]',{timeout:10000});
+await email.fill(c.email);
+const cont=await page.waitForSelector('button[type=submit],button:has-text("Continue")',{timeout:8000});
+await cont.click();
+await page.waitForTimeout(1500);
+const pw=await page.waitForSelector('input[type=password]',{timeout:10000});
+await pw.fill(c.password);
+await ss(page,'nordvpn-02-password');
+const signIn=await page.waitForSelector('button[type=submit],button:has-text("Log in")',{timeout:8000});
+await signIn.click();
+await page.waitForTimeout(3000);
+await ss(page,'nordvpn-03-signed-in');
+if(page.url().includes('login')){
+const err=await page.$('.error-message,[role=alert]');
+return{success:false,message:err?'NordVPN login failed: '+(await err.textContent()).trim():'NordVPN login failed. Check credentials or complete any verification manually.'};
+}
+await page.goto('https://my.nordaccount.com/billing/',{waitUntil:'domcontentloaded',timeout:20000});
+await ss(page,'nordvpn-04-billing');
+const cancelLink=await page.waitForSelector('a:has-text("Cancel subscription"),button:has-text("Cancel subscription"),button:has-text("Cancel plan")',{timeout:12000});
+await cancelLink.click();
+await page.waitForTimeout(2000);
+await ss(page,'nordvpn-05-cancel-flow');
+try{
+const reason=await page.$('input[type=radio],[role=radio]');
+if(reason){await reason.click();await page.waitForTimeout(500);}
+const next=await page.waitForSelector('button:has-text("Continue"),button:has-text("Next")',{timeout:6000});
+await next.click();
+await page.waitForTimeout(2000);
+}catch(e){}
+await ss(page,'nordvpn-06-confirm-screen');
+const confirmBtn=await page.waitForSelector('button:has-text("Cancel subscription"),button:has-text("Confirm cancellation"),button:has-text("Yes, cancel")',{timeout:10000});
+await confirmBtn.click();
+await page.waitForTimeout(3000);
+await ss(page,'nordvpn-07-done');
+return{success:true,message:'NordVPN subscription cancelled. Access continues until end of your billing period. Check your email for NordVPN confirmation.'};
+}catch(err){throw new Error('NordVPN script error: '+err.message);}
+}
+module.exports={cancel};
+NVEOF
+echo "✓ nordvpn.js done"
+
+cat > $APP/src/scripts/services/dropbox.js << 'DBEOF'
+async function cancel(page,c,ss){
+try{
+await page.goto('https://www.dropbox.com/login',{waitUntil:'domcontentloaded',timeout:20000});
+await ss(page,'dropbox-01-login');
+const email=await page.waitForSelector('input[name=login_email],input[type=email]',{timeout:10000});
+await email.fill(c.email);
+const pw=await page.waitForSelector('input[name=login_password],input[type=password]',{timeout:10000});
+await pw.fill(c.password);
+await ss(page,'dropbox-02-filled');
+const loginBtn=await page.waitForSelector('button[type=submit],button:has-text("Log in")',{timeout:8000});
+await loginBtn.click();
+await page.waitForTimeout(3000);
+await ss(page,'dropbox-03-signed-in');
+if(page.url().includes('login')){
+const err=await page.$('.error-message,[data-testid=error-message]');
+return{success:false,message:err?'Dropbox login failed: '+(await err.textContent()).trim():'Dropbox login failed. Check credentials or complete any verification manually.'};
+}
+await page.goto('https://www.dropbox.com/account/plan',{waitUntil:'domcontentloaded',timeout:20000});
+await ss(page,'dropbox-04-plan');
+const cancelBtn=await page.waitForSelector('a:has-text("Cancel plan"),button:has-text("Cancel plan")',{timeout:12000});
+await cancelBtn.click();
+await page.waitForTimeout(2000);
+await ss(page,'dropbox-05-cancel-survey');
+try{
+const reason=await page.$('input[type=radio],[role=radio]');
+if(reason){await reason.click();await page.waitForTimeout(500);}
+const next=await page.waitForSelector('button:has-text("Continue"),button:has-text("Next")',{timeout:6000});
+await next.click();
+await page.waitForTimeout(2000);
+}catch(e){}
+await ss(page,'dropbox-06-confirm-screen');
+const confirmBtn=await page.waitForSelector('button:has-text("Cancel plan"),button:has-text("Confirm cancellation"),button:has-text("Yes, cancel")',{timeout:10000});
+await confirmBtn.click();
+await page.waitForTimeout(3000);
+await ss(page,'dropbox-07-done');
+return{success:true,message:'Dropbox plan cancelled. Reverts to Basic at end of your billing period. Check your email for Dropbox confirmation.'};
+}catch(err){throw new Error('Dropbox script error: '+err.message);}
+}
+module.exports={cancel};
+DBEOF
+echo "✓ dropbox.js done"
+
+cat > $APP/src/scripts/services/notion.js << 'NOEOF'
+async function cancel(page,c,ss){
+try{
+await page.goto('https://www.notion.so/login',{waitUntil:'domcontentloaded',timeout:20000});
+await ss(page,'notion-01-login');
+const email=await page.waitForSelector('input[type=email]',{timeout:10000});
+await email.fill(c.email);
+const cont=await page.waitForSelector('button[type=submit],div:has-text("Continue with email")',{timeout:8000});
+await cont.click();
+await page.waitForTimeout(1500);
+const pw=await page.waitForSelector('input[type=password]',{timeout:10000});
+await pw.fill(c.password);
+await ss(page,'notion-02-password');
+const signIn=await page.waitForSelector('button[type=submit],div:has-text("Continue with password")',{timeout:8000});
+await signIn.click();
+await page.waitForTimeout(3000);
+await ss(page,'notion-03-signed-in');
+if(page.url().includes('login')){
+const err=await page.$('.notion-error,[role=alert]');
+return{success:false,message:err?'Notion login failed: '+(await err.textContent()).trim():'Notion login failed. Check credentials or complete any verification manually.'};
+}
+await page.goto('https://www.notion.so/settings/billing',{waitUntil:'domcontentloaded',timeout:20000});
+await ss(page,'notion-04-billing');
+const changePlan=await page.waitForSelector('div:has-text("Change plan"),button:has-text("Change plan")',{timeout:12000});
+await changePlan.click();
+await page.waitForTimeout(2000);
+await ss(page,'notion-05-plan-list');
+const freePlan=await page.waitForSelector('div:has-text("Free"),button:has-text("Downgrade")',{timeout:10000});
+await freePlan.click();
+await page.waitForTimeout(2000);
+await ss(page,'notion-06-confirm-screen');
+try{
+const confirmBtn=await page.waitForSelector('button:has-text("Downgrade"),button:has-text("Confirm"),button:has-text("Continue")',{timeout:8000});
+await confirmBtn.click();
+await page.waitForTimeout(3000);
+}catch(e){}
+await ss(page,'notion-07-done');
+return{success:true,message:'Notion workspace downgraded to Free at end of your billing period. Check your email for Notion confirmation.'};
+}catch(err){throw new Error('Notion script error: '+err.message);}
+}
+module.exports={cancel};
+NOEOF
+echo "✓ notion.js done"
+
+cat > $APP/src/scripts/services/grammarly.js << 'GREOF'
+async function cancel(page,c,ss){
+try{
+await page.goto('https://app.grammarly.com/',{waitUntil:'domcontentloaded',timeout:20000});
+await ss(page,'grammarly-01-login');
+const email=await page.waitForSelector('input[name=email],input[type=email]',{timeout:10000});
+await email.fill(c.email);
+const cont=await page.waitForSelector('button[type=submit],button:has-text("Continue")',{timeout:8000});
+await cont.click();
+await page.waitForTimeout(1500);
+const pw=await page.waitForSelector('input[name=password],input[type=password]',{timeout:10000});
+await pw.fill(c.password);
+await ss(page,'grammarly-02-password');
+const signIn=await page.waitForSelector('button[type=submit],button:has-text("Log In")',{timeout:8000});
+await signIn.click();
+await page.waitForTimeout(3000);
+await ss(page,'grammarly-03-signed-in');
+if(page.url().includes('login')||page.url().includes('signin')){
+const err=await page.$('.error-message,[data-testid=error-message]');
+return{success:false,message:err?'Grammarly login failed: '+(await err.textContent()).trim():'Grammarly login failed. Check credentials or complete any verification manually.'};
+}
+await page.goto('https://account.grammarly.com/subscription',{waitUntil:'domcontentloaded',timeout:20000});
+await ss(page,'grammarly-04-subscription');
+const cancelLink=await page.waitForSelector('a:has-text("Cancel subscription"),button:has-text("Cancel subscription"),button:has-text("Cancel my subscription")',{timeout:12000});
+await cancelLink.click();
+await page.waitForTimeout(2000);
+await ss(page,'grammarly-05-cancel-survey');
+try{
+const reason=await page.$('input[type=radio],[role=radio]');
+if(reason){await reason.click();await page.waitForTimeout(500);}
+const next=await page.waitForSelector('button:has-text("Continue"),button:has-text("Next")',{timeout:6000});
+await next.click();
+await page.waitForTimeout(2000);
+}catch(e){}
+await ss(page,'grammarly-06-confirm-screen');
+const confirmBtn=await page.waitForSelector('button:has-text("Cancel subscription"),button:has-text("Confirm cancellation"),button:has-text("Yes, cancel")',{timeout:10000});
+await confirmBtn.click();
+await page.waitForTimeout(3000);
+await ss(page,'grammarly-07-done');
+return{success:true,message:'Grammarly Premium cancelled. Access continues until end of your billing period. Check your email for Grammarly confirmation.'};
+}catch(err){throw new Error('Grammarly script error: '+err.message);}
+}
+module.exports={cancel};
+GREOF
+echo "✓ grammarly.js done"
+
+cat > $APP/src/scripts/services/canva.js << 'CAEOF'
+async function cancel(page,c,ss){
+try{
+await page.goto('https://www.canva.com/login',{waitUntil:'domcontentloaded',timeout:20000});
+await ss(page,'canva-01-login');
+const email=await page.waitForSelector('input[name=email],input[type=email]',{timeout:10000});
+await email.fill(c.email);
+const cont=await page.waitForSelector('button[type=submit],button:has-text("Continue")',{timeout:8000});
+await cont.click();
+await page.waitForTimeout(1500);
+const pw=await page.waitForSelector('input[name=password],input[type=password]',{timeout:10000});
+await pw.fill(c.password);
+await ss(page,'canva-02-password');
+const signIn=await page.waitForSelector('button[type=submit],button:has-text("Log in")',{timeout:8000});
+await signIn.click();
+await page.waitForTimeout(3000);
+await ss(page,'canva-03-signed-in');
+if(page.url().includes('login')){
+const err=await page.$('[data-testid=error-message],.error-message');
+return{success:false,message:err?'Canva login failed: '+(await err.textContent()).trim():'Canva login failed. Check credentials or complete any verification manually.'};
+}
+await page.goto('https://www.canva.com/settings/billing',{waitUntil:'domcontentloaded',timeout:20000});
+await ss(page,'canva-04-billing');
+const cancelLink=await page.waitForSelector('a:has-text("Cancel subscription"),button:has-text("Cancel subscription"),button:has-text("Cancel plan")',{timeout:12000});
+await cancelLink.click();
+await page.waitForTimeout(2000);
+await ss(page,'canva-05-cancel-survey');
+try{
+const reason=await page.$('input[type=radio],[role=radio]');
+if(reason){await reason.click();await page.waitForTimeout(500);}
+const next=await page.waitForSelector('button:has-text("Continue"),button:has-text("Next")',{timeout:6000});
+await next.click();
+await page.waitForTimeout(2000);
+}catch(e){}
+await ss(page,'canva-06-confirm-screen');
+const confirmBtn=await page.waitForSelector('button:has-text("Cancel subscription"),button:has-text("Confirm cancellation"),button:has-text("Yes, cancel")',{timeout:10000});
+await confirmBtn.click();
+await page.waitForTimeout(3000);
+await ss(page,'canva-07-done');
+return{success:true,message:'Canva subscription cancelled. Access continues until end of your billing period. Check your email for Canva confirmation.'};
+}catch(err){throw new Error('Canva script error: '+err.message);}
+}
+module.exports={cancel};
+CAEOF
+echo "✓ canva.js done"
 
 cat > $APP/src/server.js << 'SVEOF'
 require('dotenv').config();

@@ -1,0 +1,43 @@
+{
+  "resumeFile": "resume.pdf",
+  "coverLetterFile": null,
+
+  "personal": {
+    "firstName": "Jane",
+    "lastName": "Doe",
+    "preferredName": "",
+    "email": "jane@example.com",
+    "phone": "+1 555 123 4567",
+    "location": { "city": "Austin", "state": "TX", "country": "United States", "zip": "78701" },
+    "linkedin": "https://linkedin.com/in/janedoe",
+    "github": "",
+    "website": ""
+  },
+
+  "workAuthorization": {
+    "authorizedToWorkIn": ["United States"],
+    "requiresSponsorshipNowOrFuture": false
+  },
+
+  "preferences": {
+    "desiredSalary": "Open / negotiable",
+    "earliestStartDate": "2 weeks after offer",
+    "willingToRelocate": false,
+    "workArrangement": "Remote or hybrid",
+    "howDidYouHear": "LinkedIn"
+  },
+
+  "voluntaryDisclosures": {
+    "_comment": "EEO questions. Leave a value empty to always choose 'decline to answer'.",
+    "gender": "",
+    "race": "",
+    "hispanicOrLatino": "",
+    "veteranStatus": "",
+    "disabilityStatus": ""
+  },
+
+  "customAnswers": [
+    { "question": "Are you at least 18 years old?", "answer": "Yes" },
+    { "question": "Have you worked for this company before?", "answer": "No" }
+  ]
+}

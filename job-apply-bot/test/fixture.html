@@ -1,0 +1,22 @@
+<!doctype html><html><body>
+<h1>Senior Backend Engineer — Acme</h1>
+<p>We want someone with Node.js, Postgres, and AWS experience to build our billing platform.</p>
+<form>
+  <label for="fn">First Name *</label><input id="fn" name="first_name" required>
+  <label>Email <input type="email" name="email" required></label>
+  <div><span>Phone</span><input type="tel" name="phone"></div>
+  <label for="res">Resume/CV</label><input type="file" id="res" name="resume">
+  <label for="exp">Years of professional experience</label>
+  <select id="exp" name="exp"><option>Select...</option><option>0-2</option><option>3-5</option><option>6-10</option><option>10+</option></select>
+  <fieldset><legend>Will you now or in the future require visa sponsorship?</legend>
+    <label><input type="radio" name="spon" value="y"> Yes</label>
+    <label><input type="radio" name="spon" value="n"> No</label></fieldset>
+  <fieldset><legend>Which of these have you used in production?</legend>
+    <label><input type="checkbox" name="tech" value="node"> Node.js</label>
+    <label><input type="checkbox" name="tech" value="go"> Go</label>
+    <label><input type="checkbox" name="tech" value="pg"> PostgreSQL</label></fieldset>
+  <label for="why">Why do you want to work at Acme?</label><textarea id="why" name="why" maxlength="500"></textarea>
+  <label><input type="checkbox" name="certify"> I certify that the information provided is true and complete.</label>
+  <input type="hidden" name="csrf" value="x">
+  <button type="submit">Submit application</button>
+</form></body></html>

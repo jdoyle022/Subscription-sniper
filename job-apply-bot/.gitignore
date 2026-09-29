@@ -1,0 +1,5 @@
+node_modules/
+.browser-profile/
+runs/
+profile/*
+!profile/profile.example.json

@@ -1,0 +1,21 @@
+{
+  "name": "job-apply-bot",
+  "version": "1.0.0",
+  "description": "Fills out job applications from your resume using Claude + Playwright. You review and submit.",
+  "main": "src/index.js",
+  "scripts": {
+    "apply": "node src/index.js",
+    "test": "node test/smoke.js"
+  },
+  "license": "ISC",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.129.0",
+    "mammoth": "^1.13.0",
+    "pdf-parse": "^1.1.1",
+    "playwright": "^1.63.0",
+    "zod": "^4.6.5"
+  },
+  "bin": {
+    "job-apply": "src/index.js"
+  }
+}

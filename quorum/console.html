@@ -1,0 +1,257 @@
+<title>Quorum Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Spectral:wght@500;600&display=swap">
+<style>
+/* Layout: a two-column chamber desk — left is what the President acts on (decisions, orders to the CoS), right is the record (NOW, filings). Stacks on phones, action first. */
+:root{
+  --bg:#eef1ef; --panel:#fbfcfb; --ink:#17201d; --muted:#5b6862; --rule:#d3dad6;
+  --seal:#8a6a1f; --seal-soft:#f1e7cf; --ok:#2f6b4a; --warn:#9a5b12; --bad:#a3322b;
+  --f-display:"Spectral",Georgia,"Times New Roman",serif;
+  --f-ui:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#101614; --panel:#171f1c; --ink:#e3e9e6; --muted:#98a59f; --rule:#2a3531;
+  --seal:#d4b067; --seal-soft:#2d2717; --ok:#6fbf92; --warn:#e0a45a; --bad:#ef8a80; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#101614; --panel:#171f1c; --ink:#e3e9e6; --muted:#98a59f; --rule:#2a3531;
+  --seal:#d4b067; --seal-soft:#2d2717; --ok:#6fbf92; --warn:#e0a45a; --bad:#ef8a80; color-scheme:dark}
+body{background:var(--bg);color:var(--ink);font:15px/1.5 var(--f-ui)}
+.wrap{max-width:1180px;margin:0 auto;padding-inline:16px;padding-block:20px 48px}
+header{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:8px 24px;border-bottom:2px solid var(--ink);padding-bottom:12px}
+h1{font:600 clamp(26px,4vw,34px)/1.1 var(--f-display);margin:0;letter-spacing:.01em}
+.who{font:500 12px/1.4 var(--f-mono);color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.who b{color:var(--seal);font-weight:500}
+.grid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:28px;margin-top:22px}
+@media (max-width:860px){.grid{grid-template-columns:minmax(0,1fr)}}
+section{min-width:0}
+h2{font:600 12px/1 var(--f-ui);text-transform:uppercase;letter-spacing:.09em;color:var(--muted);margin:0 0 10px;display:flex;align-items:center;gap:8px}
+h2 .count{font-family:var(--f-mono);color:var(--seal)}
+.col{display:flex;flex-direction:column;gap:28px}
+.stack{display:flex;flex-direction:column;gap:10px}
+.card{background:var(--panel);border:1px solid var(--rule);border-radius:6px;padding:14px 16px}
+.dec{border-left:3px solid var(--seal)}
+.dec.done{border-left-color:var(--ok);opacity:.85}
+.dec h3{font:600 17px/1.3 var(--f-display);margin:0 0 4px;text-wrap:balance}
+.dec .ctx{color:var(--muted);font-size:14px;margin:0 0 10px}
+.meta{font:12px/1.4 var(--f-mono);color:var(--muted)}
+.opts{display:flex;flex-wrap:wrap;gap:8px}
+button{font:500 14px/1.2 var(--f-ui);color:var(--ink);background:var(--bg);border:1px solid var(--rule);border-radius:4px;padding:8px 12px;cursor:pointer}
+button:hover{border-color:var(--seal)}
+button:focus-visible,textarea:focus-visible,a:focus-visible{outline:2px solid var(--seal);outline-offset:2px}
+button.primary{background:var(--seal);color:var(--panel);border-color:var(--seal)}
+button[disabled]{opacity:.5;cursor:default}
+.answer{font:500 14px/1.4 var(--f-ui);color:var(--ok)}
+textarea{width:100%;box-sizing:border-box;min-height:92px;font:15px/1.45 var(--f-ui);color:var(--ink);background:var(--panel);border:1px solid var(--rule);border-radius:6px;padding:10px 12px;resize:vertical}
+.row{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;justify-content:space-between}
+.msg{display:flex;flex-direction:column;gap:6px}
+.msg .q{font-size:15px;white-space:pre-wrap;overflow-wrap:anywhere}
+.msg .r{border-top:1px dashed var(--rule);padding-top:8px;white-space:pre-wrap;overflow-wrap:anywhere;font-size:14.5px}
+.pill{display:inline-block;font:500 11px/1 var(--f-mono);text-transform:uppercase;letter-spacing:.05em;padding:4px 7px;border-radius:3px;border:1px solid currentColor}
+.p-wait{color:var(--warn)} .p-ok{color:var(--ok)} .p-bad{color:var(--bad)} .p-muted{color:var(--muted)}
+.now{font:15.5px/1.6 var(--f-display);max-height:560px;overflow:auto;overflow-wrap:anywhere}
+.now h4{font:600 18px/1.3 var(--f-display);margin:.2em 0 .5em}
+.now p{margin:0 0 .7em}
+.now ul{margin:0 0 .7em;padding-left:1.2em}
+.now code,.files .t{font-family:var(--f-mono);font-size:.86em}
+.files{list-style:none;margin:0;padding:0}
+.files li{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid var(--rule);min-width:0}
+.files a{color:var(--ink);text-decoration:none;min-width:0;overflow-wrap:anywhere}
+.files a:hover{color:var(--seal);text-decoration:underline}
+.files .d{font:12px/1.6 var(--f-mono);color:var(--muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+.note{font-size:13.5px;color:var(--muted)}
+.empty{color:var(--muted);font-size:14px;padding:6px 0}
+.seal{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--seal-soft);color:var(--seal);font:600 12px/1 var(--f-display)}
+@media (prefers-reduced-motion:no-preference){.card{transition:border-color .15s}}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Quorum Console</h1>
+    <div class="who">President <b>John Doyle</b> · CoS <b>Claude (interim)</b> · Steward <b>Claude</b></div>
+  </header>
+
+  <div class="grid">
+    <div class="col">
+      <section aria-labelledby="h-dec">
+        <h2 id="h-dec"><span class="seal">§</span>Waiting on you <span class="count" id="dec-count"></span></h2>
+        <div class="stack" id="decisions"><p class="empty">Loading decisions…</p></div>
+      </section>
+
+      <section aria-labelledby="h-msg">
+        <h2 id="h-msg">Orders to the Chief of Staff</h2>
+        <form id="composer" class="stack">
+          <label for="order" class="note">Ask a question or give an order. The CoS starts a session, reads the Quorum folder on your Drive, acts within your locks, and replies here. Replies take a few minutes.</label>
+          <textarea id="order" placeholder="e.g. Approve PACKET-002 and run Subject 50 as soon as keys are in place."></textarea>
+          <div class="row">
+            <span class="note" id="send-status"></span>
+            <button type="submit" class="primary" id="send">Send to CoS</button>
+          </div>
+        </form>
+        <div class="stack" id="thread" style="margin-top:14px"></div>
+      </section>
+    </div>
+
+    <div class="col">
+      <section aria-labelledby="h-now">
+        <h2 id="h-now">Current NOW <span class="count" id="now-name"></span></h2>
+        <div class="card now" id="now"><p class="empty">Reading the latest NOW file from your Drive…</p></div>
+      </section>
+      <section aria-labelledby="h-files">
+        <h2 id="h-files">Recent filings in the Quorum folder</h2>
+        <ul class="files" id="files"><li class="empty">Reading your Drive…</li></ul>
+      </section>
+    </div>
+  </div>
+</div>
+
+<script>
+const QUORUM_FOLDER = "1bRHd_VM2bPAdFau2OKH6u8zMVWwn1TyR";
+const COS_TRIGGER = "trig_014G6D3Gtn5trCqMux5b747T";
+const DRIVE = "Google Drive", CCR = "Claude Code Remote";
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const fmt = t => { try { return new Date(t).toLocaleString([], {month:"short",day:"numeric",hour:"numeric",minute:"2-digit"}); } catch { return ""; } };
+
+let db = null, mcp = null;
+
+function driveError(e){
+  const c = e && e.code;
+  if (c === "server_not_connected" || c === "selection_required") return "Connect Google Drive in claude.ai Settings → Connectors to see the live record.";
+  if (c === "needs_reauth") return "Reconnect Google Drive in claude.ai Settings → Connectors.";
+  if (c === "not_in_manifest" || c === "not_granted" || c === "capability_disabled") return "Drive access isn't allowed for this page in this view.";
+  return "Couldn't read Drive just now (" + esc(c || "error") + "). Reload to try again.";
+}
+
+// Minimal markdown for NOW files: headings, bullets, bold, inline code, paragraphs.
+function md(src){
+  const inline = s => esc(s).replace(/\\([#*_`\-\[\]()>|.])/g,"$1").replace(/\*\*(.+?)\*\*/g,"<b>$1</b>").replace(/`([^`]+)`/g,"<code>$1</code>");
+  const out = []; let list = false;
+  for (const raw of src.replace(/\r/g,"").split("\n")){
+    const line = raw.replace(/\s+$/,"");
+    const h = line.match(/^\\?#{1,3}\s*(.*)/), li = line.match(/^\s*\\?[-*]\s+(.*)/);
+    if (li){ if(!list){out.push("<ul>");list=true} out.push("<li>"+inline(li[1])+"</li>"); continue; }
+    if (list){ out.push("</ul>"); list=false; }
+    if (!line.trim()) continue;
+    out.push(h ? "<h4>"+inline(h[1])+"</h4>" : "<p>"+inline(line)+"</p>");
+  }
+  if (list) out.push("</ul>");
+  return out.join("");
+}
+
+async function loadDrive(){
+  if (!mcp){ $("now").innerHTML = '<p class="empty">Live Drive reading isn\'t available in this view.</p>'; $("files").innerHTML = ""; return; }
+  try {
+    const r = await mcp.callTool(DRIVE, "search_files", {query:`parentId = '${QUORUM_FOLDER}'`, pageSize:40, excludeContentSnippets:true});
+    const files = (r.payload && r.payload.files) || [];
+    files.sort((a,b) => String(b.modifiedTime).localeCompare(String(a.modifiedTime)));
+    $("files").innerHTML = files.filter(f => !/folder/.test(f.mimeType)).slice(0,12).map(f =>
+      `<li><a href="${esc(f.viewUrl)}" target="_blank" rel="noopener"><span class="t">${esc(f.title)}</span></a><span class="d">${esc(fmt(f.modifiedTime))}</span></li>`
+    ).join("") || '<li class="empty">No files found.</li>';
+    const nows = files.filter(f => /^00-NOW-(\d+)/.test(f.title))
+      .sort((a,b) => +b.title.match(/^00-NOW-(\d+)/)[1] - +a.title.match(/^00-NOW-(\d+)/)[1]);
+    if (!nows.length){ $("now").innerHTML = '<p class="empty">No NOW file found in the Quorum folder.</p>'; return; }
+    $("now-name").textContent = nows[0].title;
+    const c = await mcp.callTool(DRIVE, "read_file_content", {fileId: nows[0].id});
+    const text = (c.payload && c.payload.fileContent) || "";
+    $("now").innerHTML = md(text) || '<p class="empty">The NOW file is empty.</p>';
+  } catch(e){
+    const m = '<p class="empty">'+driveError(e)+'</p>';
+    $("now").innerHTML = m; $("files").innerHTML = "";
+  }
+}
+
+async function wakeCoS(text){
+  if (!mcp || COS_TRIGGER.startsWith("__")) throw {code:"no_trigger"};
+  return mcp.callTool(CCR, "fire_trigger", {trigger_id: COS_TRIGGER, text});
+}
+function wakeError(e){
+  const c = e && e.code;
+  if (c === "server_not_connected" || c === "needs_reauth") return "Saved. The CoS couldn't be started from here; it will pick this up on its next run.";
+  if (c === "not_in_manifest") return "Saved. You declined starting the CoS from this page; it will pick this up on its next run.";
+  return "Saved. Starting the CoS failed (" + esc(c || "error") + "); it will pick this up on its next run.";
+}
+
+function renderDecisions(docs){
+  const open = docs.filter(d => !d.data().answer).length;
+  $("dec-count").textContent = open ? String(open) : "";
+  if (!docs.length){ $("decisions").innerHTML = '<p class="empty">Nothing is waiting on you. The CoS posts decisions here when only you can make them.</p>'; return; }
+  const order = docs.slice().sort((a,b) => (!!a.data().answer - !!b.data().answer) || String(a.data().posted||"").localeCompare(String(b.data().posted||"")));
+  $("decisions").innerHTML = order.map(d => {
+    const v = d.data(), done = !!v.answer;
+    const opts = (v.options || []).map((o,i) => `<button type="button" data-dec="${esc(d.id)}" data-opt="${i}" ${done?"disabled":""}>${esc(o)}</button>`).join("");
+    return `<article class="card dec ${done?"done":""}">
+      <div class="meta">${esc(v.ref || d.id)}${v.waitingSince ? " · waiting since " + esc(v.waitingSince) : ""}</div>
+      <h3>${esc(v.question)}</h3>
+      ${v.context ? `<p class="ctx">${esc(v.context)}</p>` : ""}
+      ${done ? `<div class="answer">Decided: ${esc(v.answer)} <span class="meta">· ${esc(fmt(v.answeredAt))}</span></div>` : `<div class="opts">${opts}</div>`}
+    </article>`;
+  }).join("");
+}
+
+async function decide(id, idx, btn){
+  const ref = db.doc("decisions/" + id);
+  const snap = await ref.get();
+  if (!snap.exists || snap.data().answer) return;
+  const v = snap.data(), answer = v.options[idx];
+  btn.closest(".opts").querySelectorAll("button").forEach(b => b.disabled = true);
+  try {
+    await ref.update({answer, answeredAt: new Date().toISOString(), cosNotified: false});
+  } catch(e){ btn.closest(".opts").querySelectorAll("button").forEach(b => b.disabled = false); return; }
+  try { await wakeCoS(`President decision recorded in the Quorum Console.\nDecision id: ${id}\nQuestion: ${v.question}\nAnswer: ${answer}`); await ref.update({cosNotified:true}); }
+  catch(e){ /* the saved answer is the record; the CoS reads undelivered answers on its next run */ }
+}
+
+function renderThread(docs){
+  if (!docs.length){ $("thread").innerHTML = ""; return; }
+  $("thread").innerHTML = docs.map(d => {
+    const v = d.data();
+    const pill = v.reply ? '<span class="pill p-ok">Answered</span>'
+      : v.status === "working" ? '<span class="pill p-wait">CoS working</span>'
+      : v.status === "sent" ? '<span class="pill p-wait">Sent</span>'
+      : '<span class="pill p-muted">Saved</span>';
+    return `<article class="card msg">
+      <div class="row"><span class="meta">You · ${esc(fmt(v.createdAt))}</span>${pill}</div>
+      <div class="q">${esc(v.text)}</div>
+      ${v.reply ? `<div class="r"><span class="meta">CoS · ${esc(fmt(v.repliedAt))}</span>\n${esc(v.reply)}</div>` : ""}
+    </article>`;
+  }).join("");
+}
+
+$("composer").addEventListener("submit", async e => {
+  e.preventDefault();
+  const text = $("order").value.trim();
+  if (!text || !db) return;
+  $("send").disabled = true; $("send-status").textContent = "Saving…";
+  let ref;
+  try { ref = await db.collection("messages").add({text, createdAt: new Date().toISOString(), status: "saved"}); }
+  catch(err){ $("send-status").textContent = "Couldn't save the message (" + (err.code || "error") + "). Try again."; $("send").disabled = false; return; }
+  $("order").value = "";
+  try {
+    $("send-status").textContent = "Starting the CoS…";
+    await wakeCoS(`New order from the President in the Quorum Console.\nMessage id: ${ref.id}\n\n${text}`);
+    await ref.update({status: "sent"});
+    $("send-status").textContent = "Sent. The CoS will reply here.";
+  } catch(err){ $("send-status").innerHTML = wakeError(err); }
+  $("send").disabled = false;
+});
+
+$("decisions").addEventListener("click", e => {
+  const b = e.target.closest("button[data-dec]");
+  if (b && db) decide(b.dataset.dec, +b.dataset.opt, b);
+});
+
+(async () => {
+  const use = n => (window.claude && window.claude.use) ? window.claude.use(n) : Promise.resolve(null);
+  const [dbNs, mcpNs] = await Promise.all([use("db"), use("mcp")]);
+  db = dbNs; mcp = mcpNs;
+  if (db){
+    db.collection("decisions").onSnapshot(s => renderDecisions(s.docs), () => { $("decisions").innerHTML = '<p class="empty">Decisions are unavailable in this view.</p>'; });
+    db.collection("messages").orderBy("createdAt","desc").limit(30).onSnapshot(s => renderThread(s.docs), () => {});
+  } else {
+    $("decisions").innerHTML = '<p class="empty">Sign in to claude.ai to see and answer decisions.</p>';
+    $("send").disabled = true; $("send-status").textContent = "Sign in to send orders.";
+  }
+  loadDrive();
+})();
+</script>

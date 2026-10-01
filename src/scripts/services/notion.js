@@ -2,7 +2,7 @@ const { clickFirst, tryClick, fillFirst, waitForLeave, pageSays, loginFailed, un
 
 // Notion often logs in with an emailed code instead of a password; that
 // case is reported as a login failure so the user cancels manually.
-async function cancel(page, c, ss) {
+async function draftCancellation(page, c, ss) {
   await page.goto('https://www.notion.so/login', { waitUntil: 'domcontentloaded' });
   await fillFirst(page, ['input[type="email"]', 'input[name="email"]'], c.email);
   await clickFirst(page, ['div[role="button"]:has-text("Continue")', 'button:has-text("Continue")']);
@@ -23,8 +23,11 @@ async function cancel(page, c, ss) {
   await clickFirst(page, ['div[role="button"]:has-text("Downgrade")', 'div[role="button"]:has-text("Confirm")', 'button:has-text("Confirm")']);
   await ss(page, 'notion-done');
 
-  if (!(await pageSays(page, /downgrade(d)?|cancel(l)?ed|free plan/))) return unconfirmed('Notion');
+  if (!(await pageSays(page, /has been downgraded|cancel(l)?ed|free plan/))) return unconfirmed('Notion');
   return { success: true, message: 'Notion plan downgraded to Free at the end of the billing period.' };
 }
 
+// Quarantined draft: never invoke until replaced by an audited target-aware adapter.
+const { manualRequired } = require('../outcomes');
+async function cancel() { return manualRequired('notion'); }
 module.exports = { cancel };

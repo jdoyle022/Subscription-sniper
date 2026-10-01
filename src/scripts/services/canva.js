@@ -2,7 +2,7 @@ const { clickFirst, tryClick, fillFirst, waitForLeave, pageSays, loginFailed, un
 
 // Canva usually logs in with an emailed code; that case is reported for
 // manual cancellation rather than guessed at.
-async function cancel(page, c, ss) {
+async function draftCancellation(page, c, ss) {
   await page.goto('https://www.canva.com/login', { waitUntil: 'domcontentloaded' });
   await tryClick(page, ['button:has-text("Continue with email")', 'button:has-text("Continue another way")'], 5000);
   await fillFirst(page, ['input[type="email"]', 'input[name="email"]'], c.email);
@@ -25,8 +25,11 @@ async function cancel(page, c, ss) {
   await clickFirst(page, ['button:has-text("Cancel subscription")', 'button:has-text("Confirm")']);
   await ss(page, 'canva-done');
 
-  if (!(await pageSays(page, /cancel(l)?ed|will (end|expire)|access until/))) return unconfirmed('Canva');
+  if (!(await pageSays(page, /cancel(l)?ed|will (end|expire)/))) return unconfirmed('Canva');
   return { success: true, message: 'Canva subscription cancelled. Pro continues until end of billing period.' };
 }
 
+// Quarantined draft: never invoke until replaced by an audited target-aware adapter.
+const { manualRequired } = require('../outcomes');
+async function cancel() { return manualRequired('canva'); }
 module.exports = { cancel };

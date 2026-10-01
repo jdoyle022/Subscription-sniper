@@ -1,6 +1,6 @@
 const { clickFirst, tryClick, fillFirst, waitForLeave, pageSays, loginFailed, unconfirmed } = require('../helpers');
 
-async function cancel(page, c, ss) {
+async function draftCancellation(page, c, ss) {
   await page.goto('https://www.disneyplus.com/login', { waitUntil: 'domcontentloaded' });
   await fillFirst(page, ['input[type="email"]', '#email'], c.email);
   await clickFirst(page, ['button:has-text("Continue")', 'button[type="submit"]']);
@@ -23,4 +23,7 @@ async function cancel(page, c, ss) {
   return { success: true, message: 'Disney+ cancelled. Access continues until end of billing period.' };
 }
 
+// Quarantined draft: never invoke until replaced by an audited target-aware adapter.
+const { manualRequired } = require('../outcomes');
+async function cancel() { return manualRequired('disney'); }
 module.exports = { cancel };

@@ -1,6 +1,6 @@
 const { clickFirst, tryClick, fillFirst, waitForLeave, pageSays, unconfirmed } = require('../helpers');
 
-async function cancel(page, creds, screenshot) {
+async function draftCancellation(page, creds, screenshot) {
   await page.goto('https://account.adobe.com/plans', { waitUntil: 'domcontentloaded', timeout: 20000 });
   await screenshot(page, 'adobe-01-plans');
 
@@ -51,4 +51,7 @@ async function cancel(page, creds, screenshot) {
   };
 }
 
+// Quarantined draft: never invoke until replaced by an audited target-aware adapter.
+const { manualRequired } = require('../outcomes');
+async function cancel() { return manualRequired('adobe'); }
 module.exports = { cancel };

@@ -1,7 +1,7 @@
 const { clickFirst, tryClick, fillFirst, waitForLeave, pageSays, loginFailed, unconfirmed } = require('../helpers');
 
 // Cancelling Dropbox downgrades the account to Basic (free) at period end.
-async function cancel(page, c, ss) {
+async function draftCancellation(page, c, ss) {
   await page.goto('https://www.dropbox.com/login', { waitUntil: 'domcontentloaded' });
   await fillFirst(page, ['input[name="login_email"]', 'input[type="email"]'], c.email);
   await tryClick(page, 'button:has-text("Continue")', 3000);
@@ -23,4 +23,7 @@ async function cancel(page, c, ss) {
   return { success: true, message: 'Dropbox plan cancelled. Account moves to Basic at the end of the billing period.' };
 }
 
+// Quarantined draft: never invoke until replaced by an audited target-aware adapter.
+const { manualRequired } = require('../outcomes');
+async function cancel() { return manualRequired('dropbox'); }
 module.exports = { cancel };

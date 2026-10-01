@@ -1,6 +1,6 @@
 const { clickFirst, tryClick, fillFirst, waitForLeave, pageSays, loginFailed, unconfirmed } = require('../helpers');
 
-async function cancel(page, c, ss) {
+async function draftCancellation(page, c, ss) {
   await page.goto('https://auth.hulu.com/web/login', { waitUntil: 'domcontentloaded' });
   await fillFirst(page, ['input[name="email"]', 'input[type="email"]'], c.email);
   await tryClick(page, 'button:has-text("Continue")', 3000);
@@ -23,4 +23,7 @@ async function cancel(page, c, ss) {
   return { success: true, message: 'Hulu cancelled. Access continues until end of billing period.' };
 }
 
+// Quarantined draft: never invoke until replaced by an audited target-aware adapter.
+const { manualRequired } = require('../outcomes');
+async function cancel() { return manualRequired('hulu'); }
 module.exports = { cancel };

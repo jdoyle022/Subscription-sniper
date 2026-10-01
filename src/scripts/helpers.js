@@ -4,26 +4,52 @@ function anyOf(selectors) {
   return Array.isArray(selectors) ? selectors.join(', ') : selectors;
 }
 
-// Waits for the first matching element and clicks it. Throws if none appears.
-async function clickFirst(page, selectors, timeout = 10000) {
-  const el = await page.waitForSelector(anyOf(selectors), { timeout, state: 'visible' });
-  await el.click();
-  await page.waitForTimeout(1500);
+// Require a single visible match. Selector alternatives form a union, not
+// a priority list. Destructive adapters must pass a target-scoped locator here.
+async function uniqueVisible(scope, selectors, timeout = 10000) {
+  const matches = scope.locator(anyOf(selectors));
+  const deadline = Date.now() + timeout;
+  do {
+    const visible = [];
+    for (let i = 0, n = await matches.count(); i < n; i++) {
+      const candidate = matches.nth(i);
+      if (await candidate.isVisible()) visible.push(candidate);
+    }
+    if (visible.length > 1) {
+      const err = new Error('Ambiguous selector; manual review required');
+      err.code = 'SELECTOR_AMBIGUOUS';
+      throw err;
+    }
+    if (visible.length === 1) return visible[0];
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  } while (Date.now() < deadline);
+  const err = new Error('Required control not found');
+  err.code = 'SELECTOR_MISSING';
+  throw err;
 }
 
-// Clicks the first matching element if it shows up; returns whether it did.
-async function tryClick(page, selectors, timeout = 4000) {
+async function clickFirst(scope, selectors, timeout = 10000) {
+  const el = await uniqueVisible(scope, selectors, timeout);
+  await el.click({ timeout });
+}
+
+// Only absence is optional. A failed click may have changed the account;
+// ambiguity or dispatch errors must propagate to the guarded runner.
+async function tryClick(scope, selectors, timeout = 4000) {
+  let el;
   try {
-    await clickFirst(page, selectors, timeout);
-    return true;
-  } catch {
-    return false;
+    el = await uniqueVisible(scope, selectors, timeout);
+  } catch (err) {
+    if (err.code === 'SELECTOR_MISSING') return false;
+    throw err;
   }
+  await el.click({ timeout });
+  return true;
 }
 
-async function fillFirst(page, selectors, value, timeout = 10000) {
-  const el = await page.waitForSelector(anyOf(selectors), { timeout, state: 'visible' });
-  await el.fill(value);
+async function fillFirst(scope, selectors, value, timeout = 10000) {
+  const el = await uniqueVisible(scope, selectors, timeout);
+  await el.fill(value, { timeout });
 }
 
 // Waits until the URL no longer matches `loginPattern`. Returns false on timeout,
@@ -64,4 +90,4 @@ function unconfirmed(name) {
   };
 }
 
-module.exports = { clickFirst, tryClick, fillFirst, waitForLeave, pageSays, loginFailed, unconfirmed };
+module.exports = { uniqueVisible, clickFirst, tryClick, fillFirst, waitForLeave, pageSays, loginFailed, unconfirmed };

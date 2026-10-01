@@ -1,7 +1,7 @@
 const { clickFirst, tryClick, fillFirst, waitForLeave, pageSays, loginFailed, unconfirmed } = require('../helpers');
 
 // NordVPN cancellation = turning off auto-renewal in Nord Account.
-async function cancel(page, c, ss) {
+async function draftCancellation(page, c, ss) {
   await page.goto('https://my.nordaccount.com/login/', { waitUntil: 'domcontentloaded' });
   await fillFirst(page, ['input[name="identifier"]', 'input[type="email"]'], c.email);
   await clickFirst(page, ['button:has-text("Continue")', 'button[type="submit"]']);
@@ -21,4 +21,7 @@ async function cancel(page, c, ss) {
   return { success: true, message: 'NordVPN auto-renewal turned off. Service continues until the paid period ends.' };
 }
 
+// Quarantined draft: never invoke until replaced by an audited target-aware adapter.
+const { manualRequired } = require('../outcomes');
+async function cancel() { return manualRequired('nordvpn'); }
 module.exports = { cancel };

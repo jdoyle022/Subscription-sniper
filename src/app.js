@@ -4,7 +4,7 @@ const path = require('path');
 const { rateLimit } = require('express-rate-limit');
 const { encrypt } = require('./utils/crypto');
 const { checkAdminPassword, issueAdminToken, verifyToken, requireAdmin } = require('./utils/auth');
-const { isSupported, normalizeService } = require('./scripts');
+const { isSupported, isEnabled, normalizeService } = require('./scripts');
 const { corsOrigins } = require('./config');
 
 const isNonEmptyString = (v, max = 256) => typeof v === 'string' && v.trim().length > 0 && v.length <= max;
@@ -50,6 +50,14 @@ function createApp(queue) {
     if (!isSupported(service)) {
       return res.status(422).json({ error: 'manual_required', message: `No script for ${service} yet — cancel manually.` });
     }
+    if (!isEnabled(service)) {
+      return res.status(422).json({ error: 'manual_required', outcome: 'manual_required',
+        message: 'This service automation has not been validated. Cancel manually.' });
+    }
+    if (!isNonEmptyString(req.body?.targetId, 256) ||
+        !isNonEmptyString(req.get('Idempotency-Key'), 128)) {
+      return res.status(400).json({ error: 'Target and Idempotency-Key required' });
+    }
     if (!isNonEmptyString(credentials?.email) || !isNonEmptyString(credentials?.password, 1024)) {
       return res.status(400).json({ error: 'Credentials required' });
     }
@@ -57,6 +65,8 @@ function createApp(queue) {
     try {
       const job = await queue.addCancelJob({
         service: normalizeService(service),
+        targetId: req.body.targetId,
+        idempotencyKey: req.get('Idempotency-Key'),
         credentials: { email: credentials.email, password: encrypt(credentials.password) },
         userId,
         billingSource: billingSource || null,
@@ -64,8 +74,8 @@ function createApp(queue) {
       });
       res.json({ jobId: job.id, status: 'queued', message: `Cancellation queued for ${service}.` });
     } catch (err) {
-      console.error('Queue failed:', err.message);
-      res.status(500).json({ error: 'Queue failed' });
+      console.error('Queue request could not be acknowledged.');
+      res.status(err.code === 'IDEMPOTENCY_CONFLICT' ? 409 : 503).json({ error: err.code === 'IDEMPOTENCY_CONFLICT' ? 'Idempotency conflict' : 'Queue unavailable; retry with the same Idempotency-Key' });
     }
   });
 

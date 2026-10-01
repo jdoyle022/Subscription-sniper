@@ -1,6 +1,6 @@
 const { clickFirst, tryClick, fillFirst, waitForLeave, pageSays, loginFailed, unconfirmed } = require('../helpers');
 
-async function cancel(page, c, ss) {
+async function draftCancellation(page, c, ss) {
   await page.goto('https://www.grammarly.com/signin', { waitUntil: 'domcontentloaded' });
   await fillFirst(page, ['input[name="email"]', 'input[type="email"]'], c.email);
   await tryClick(page, 'button:has-text("Continue")', 3000);
@@ -23,8 +23,11 @@ async function cancel(page, c, ss) {
   await clickFirst(page, ['button:has-text("Cancel Subscription")', 'button:has-text("Confirm")']);
   await ss(page, 'grammarly-done');
 
-  if (!(await pageSays(page, /cancel(l)?ed|will not renew|access until/))) return unconfirmed('Grammarly');
+  if (!(await pageSays(page, /cancel(l)?ed|will not renew/))) return unconfirmed('Grammarly');
   return { success: true, message: 'Grammarly subscription cancelled. Premium continues until end of billing period.' };
 }
 
+// Quarantined draft: never invoke until replaced by an audited target-aware adapter.
+const { manualRequired } = require('../outcomes');
+async function cancel() { return manualRequired('grammarly'); }
 module.exports = { cancel };

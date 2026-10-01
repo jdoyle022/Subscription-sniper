@@ -3,7 +3,6 @@ const test = require('node:test');
 const assert = require('node:assert');
 const jwt = require('jsonwebtoken');
 const { createApp } = require('../src/app');
-const { decrypt } = require('../src/utils/crypto');
 
 const added = [];
 const fakeQueue = {
@@ -57,14 +56,16 @@ test('rejects tokens signed with another secret or algorithm', async () => {
   assert.strictEqual((await fetch(`${base}/api/admin/jobs`, { headers: { authorization: `Bearer ${none}` } })).status, 401);
 });
 
-test('queues a supported service with the password encrypted', async () => {
+test('all unvalidated services are rejected without queuing credentials', async () => {
   const auth = { authorization: `Bearer ${await login()}` };
-  const res = await post('/api/cancel', { service: ' Adobe ', userId: 'u1', credentials: { email: 'a@b.c', password: 'pw' } }, auth);
-  assert.strictEqual(res.status, 200);
-  const job = added.at(-1);
-  assert.strictEqual(job.service, 'adobe');
-  assert.notStrictEqual(job.credentials.password, 'pw');
-  assert.strictEqual(decrypt(job.credentials.password), 'pw');
+  for (const service of ['adobe', 'canva', 'disney+', 'dropbox', 'duolingo', 'grammarly',
+    'hulu', 'netflix', 'nordvpn', 'notion', 'spotify']) {
+    const res = await post('/api/cancel', { service, userId: 'u1',
+      credentials: { email: 'a@b.c', password: 'pw' } }, auth);
+    assert.strictEqual(res.status, 422);
+    assert.strictEqual((await res.json()).outcome, 'manual_required');
+  }
+  assert.strictEqual(added.length, 0);
 });
 
 test('validates cancel requests', async () => {
@@ -72,7 +73,7 @@ test('validates cancel requests', async () => {
   const creds = { email: 'a@b.c', password: 'pw' };
   assert.strictEqual((await post('/api/cancel', { service: 'netflix', credentials: creds })).status, 401);
   assert.strictEqual((await post('/api/cancel', { service: 'netflix' }, auth)).status, 400);
-  assert.strictEqual((await post('/api/cancel', { service: 'netflix', userId: 'u' }, auth)).status, 400);
+  assert.strictEqual((await post('/api/cancel', { service: 'netflix', userId: 'u' }, auth)).status, 422);
   assert.strictEqual((await post('/api/cancel', { service: ['x'], userId: 'u', credentials: creds }, auth)).status, 400);
   assert.strictEqual((await post('/api/cancel', { service: 'myspace', userId: 'u', credentials: creds }, auth)).status, 422);
   assert.strictEqual((await post('/api/cancel', { service: 'netflix', userId: 'u', billingSource: 'apple' }, auth)).status, 422);

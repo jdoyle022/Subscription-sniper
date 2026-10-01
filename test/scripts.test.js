@@ -25,7 +25,7 @@ test('aliases and case', () => {
 
 test('unsupported service and missing credentials short-circuit', async () => {
   assert.strictEqual((await runCancellation('myspace', null)).manual, true);
-  assert.match((await runCancellation('netflix', null)).message, /Credentials required/);
+  assert.strictEqual((await runCancellation('netflix', null)).outcome, 'manual_required');
 });
 
 // Drives the shared helpers against a local page in real Chromium.

@@ -3,25 +3,21 @@ const { Queue } = require('bullmq');
 const IORedis = require('ioredis');
 
 const connection = new IORedis(process.env.REDIS_URL || 'redis://localhost:6379', {
-  maxRetriesPerRequest: null,
+  maxRetriesPerRequest: 1,
+  enableOfflineQueue: false,
 });
 
-const WEEK = 7 * 24 * 60 * 60;
+const { encrypt } = require('../utils/crypto');
+const { createAddCancelJob, JOB_OPTIONS } = require('./operations');
+connection.on('error', () => console.error('Queue Redis connection unavailable.'));
 
 const cancelQueue = new Queue('cancellations', {
   connection,
-  defaultJobOptions: {
-    attempts: 3,
-    backoff: { type: 'exponential', delay: 5000 },
-    // Keep a week of history for the admin view, then let Redis drop it.
-    removeOnComplete: { age: WEEK },
-    removeOnFail: { age: WEEK },
-  },
+  defaultJobOptions: JOB_OPTIONS,
 });
 
-async function addCancelJob(data) {
-  return cancelQueue.add('cancel', data, { jobId: `${data.userId}-${data.service}-${Date.now()}` });
-}
+const addCancelJob = createAddCancelJob({ queue: cancelQueue, redis: connection,
+  encrypt, secret: process.env.JWT_SECRET });
 
 // Never include job.data.credentials here: this shape is returned by the API.
 function formatJob(job, status) {
@@ -31,7 +27,8 @@ function formatJob(job, status) {
     userId: job.data.userId,
     status,
     result: job.returnvalue || null,
-    error: job.failedReason || null,
+    error: job.failedReason ? 'Job could not complete; manual review required.' : null,
+    outcome: job.returnvalue?.outcome || (status === 'failed' ? 'needs_review' : null),
     requestedAt: job.data.requestedAt,
     finishedAt: job.finishedOn ? new Date(job.finishedOn).toISOString() : null,
   };

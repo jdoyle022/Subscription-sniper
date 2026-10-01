@@ -48,6 +48,11 @@ test('Disney aliases resolve to one canonical identity', () => {
   assert.deepEqual(one, two);
 });
 
+test('account fences survive auth/encryption secret rotation', () => {
+  const data = { service: 'service', targetId: 'plan', idempotencyKey: 'same', credentials: { email: 'a@b.c' } };
+  assert.deepEqual(operationIdentity(data, 'old-secret'), operationIdentity(data, 'new-secret'));
+});
+
 test('confirmed cancellation requires a matching re-read of billing state', async () => {
   const f = fixture();
   const result = await f.run('service', f.credentials, f.job);

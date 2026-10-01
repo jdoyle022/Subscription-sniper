@@ -101,9 +101,10 @@ logging in. This is best-effort recovery for old records; new vault credentials
 have an enforced TTL. Redis persistence/backup retention remains an operator
 responsibility.
 
-Do not rotate the identity secret (`JWT_SECRET`) or clear `sniper:v2:*` reservation
-keys to retry an uncertain operation. Doing so can invalidate duplicate protection.
+Do not clear `sniper:v2:*` reservation keys to retry an uncertain operation.
 Reconcile the provider account and stop workers before any deliberate rearm.
+Reservation identities survive JWT/encryption-key rotation. Rotating the encryption
+key invalidates outstanding vault credentials, which then fail without submission.
 
 To promote a service, replace its guessed-selector draft with an audited adapter
 implementing `inspect(page, credentials, targetId)`,

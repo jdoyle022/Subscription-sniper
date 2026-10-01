@@ -17,7 +17,7 @@ const cancelQueue = new Queue('cancellations', {
 });
 
 const addCancelJob = createAddCancelJob({ queue: cancelQueue, redis: connection,
-  encrypt, secret: process.env.JWT_SECRET });
+  encrypt });
 
 // Never include job.data.credentials here: this shape is returned by the API.
 function formatJob(job, status) {

@@ -1,0 +1,25 @@
+{
+  "name": "subscription-sniper",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Queue-driven browser automation that cancels online subscriptions.",
+  "main": "src/server.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "worker": "node src/queue/worker.js",
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "bullmq": "^5.81.5",
+    "cors": "^2.8.6",
+    "dotenv": "^16.4.7",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.7.0",
+    "ioredis": "^5.11.1",
+    "jsonwebtoken": "^9.0.3",
+    "playwright": "^1.63.0"
+  }
+}

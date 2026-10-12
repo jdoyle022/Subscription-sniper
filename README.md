@@ -81,6 +81,32 @@ All endpoints except `/health` and `/api/auth/token` need `Authorization: Bearer
 - Cross-origin browser requests are blocked unless the origin is listed in `CORS_ORIGIN`.
 - Behind a reverse proxy, set `TRUST_PROXY=1` so rate limiting sees real client IPs.
 
+## Capturing a service's pages
+
+Adapters are written against real pages, not guesses. `tools/capture` opens a
+browser that **you** drive and saves each screen with personal details removed:
+
+```bash
+npm install
+npx playwright install chromium
+npm run capture -- spotify --redact "Your Name" --redact "your-username"
+```
+
+1. Log in yourself in the window that opens.
+2. Go to your plan page and click through the cancel steps. Press Enter in the
+   terminal to save each screen (or type a label first).
+3. Any click on a button labelled cancel/confirm/yes/end/downgrade is held and
+   saved first. Press Enter to **block** it (the default) or type `allow` if it
+   only moves to the next step. Always block the final confirmation.
+4. Type `q` to finish.
+
+Each screen is saved under `captures/` as sanitized HTML plus an accessibility
+snapshot (`.aria.yml`). Scripts, hidden form fields, input values, URL query
+strings, emails, card digits and long numbers are stripped; prices and dates are
+kept because adapters need them. `--screenshots` also saves images, which are
+**not** redacted beyond masking inputs. Review the files before sharing them,
+and never commit them: `captures/` is git-ignored.
+
 ## Development
 
 ```bash

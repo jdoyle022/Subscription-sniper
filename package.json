@@ -10,7 +10,8 @@
   "scripts": {
     "start": "node src/server.js",
     "worker": "node src/queue/worker.js",
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "capture": "node tools/capture/capture.js"
   },
   "dependencies": {
     "bullmq": "^5.81.5",

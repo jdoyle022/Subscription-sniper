@@ -22,6 +22,7 @@
       <div class="brand">Alpaca Trader <span id="mode-badge" class="badge">…</span></div>
       <div id="clock" class="muted">…</div>
       <div class="top-actions">
+        <button id="connect-btn" class="ghost" hidden>Connect with Alpaca</button>
         <label class="switch" title="Blocks every new order (cancels and closes still work)">
           <input type="checkbox" id="kill-switch">
           <span>Kill switch</span>
@@ -33,6 +34,7 @@
 
     <nav class="tabs" role="tablist">
       <button class="tab active" data-tab="desk" role="tab">Desk</button>
+      <button class="tab" data-tab="options" role="tab">Options</button>
       <button class="tab" data-tab="ai" role="tab">AI seats <span id="pending-count" class="pill" hidden></span></button>
       <button class="tab" data-tab="audit" role="tab">Audit log</button>
     </nav>
@@ -69,9 +71,14 @@
             <form id="ticket" class="card">
               <h2>Order ticket</h2>
               <div class="row">
-                <label>Symbol<input name="symbol" id="t-symbol" placeholder="AAPL or BTC/USD" required autocomplete="off"></label>
+                <label>Symbol<input name="symbol" id="t-symbol" placeholder="AAPL, BTC/USD, or option symbol" required autocomplete="off" list="asset-list"></label>
+                <select id="t-class" title="Search in">
+                  <option value="us_equity">Stocks/ETFs</option>
+                  <option value="crypto">Crypto</option>
+                </select>
                 <button type="button" id="quote-btn" class="ghost">Quote</button>
               </div>
+              <datalist id="asset-list"></datalist>
               <div id="quote-box" class="quote muted"></div>
 
               <div class="seg side" id="t-side">
@@ -144,6 +151,67 @@
                 <button type="submit" id="submit-btn" class="primary">Review &amp; submit</button>
               </div>
               <div id="ticket-msg" class="msg"></div>
+            </form>
+          </div>
+        </div>
+      </section>
+
+      <section id="tab-options" class="tab-panel" hidden>
+        <div class="card">
+          <form id="chain-form" class="row">
+            <label>Underlying<input id="o-under" placeholder="SPY" required autocomplete="off"></label>
+            <button type="submit" class="ghost">Load expirations</button>
+            <label>Expiration<select id="o-exp"></select></label>
+            <label>Strikes around spot<select id="o-range">
+              <option value="0.05">±5%</option>
+              <option value="0.1" selected>±10%</option>
+              <option value="0.2">±20%</option>
+              <option value="0.5">±50%</option>
+            </select></label>
+            <button type="button" id="o-load" class="primary">Show chain</button>
+          </form>
+          <p id="o-info" class="muted small">Click an <strong>ask</strong> to add a buy leg, or a <strong>bid</strong> to add a sell leg. Prices are per share; 1 contract = 100 shares.</p>
+        </div>
+
+        <div class="grid">
+          <div class="col">
+            <div class="card">
+              <div class="card-head"><h2>Chain</h2><span id="o-spot" class="muted"></span></div>
+              <div class="table-wrap"><table id="chain" class="chain"></table></div>
+            </div>
+          </div>
+          <div class="col">
+            <form id="strategy" class="card">
+              <div class="card-head">
+                <h2>Strategy builder</h2>
+                <button type="button" id="s-clear" class="ghost small">Clear</button>
+              </div>
+              <div id="legs" class="legs"><p class="muted">No legs yet. Pick contracts from the chain (up to 4).</p></div>
+              <div class="row">
+                <label>Quantity (strategy units)<input id="s-qty" type="number" min="1" step="1" value="1" required></label>
+                <label>Type
+                  <select id="s-type">
+                    <option value="limit">Limit</option>
+                    <option value="market">Market</option>
+                  </select>
+                </label>
+                <label>Time in force
+                  <select id="s-tif">
+                    <option value="day">Day</option>
+                    <option value="gtc">GTC</option>
+                  </select>
+                </label>
+              </div>
+              <div class="row">
+                <label>Net limit price <span class="muted">(+ debit / − credit, per unit)</span><input id="s-limit" type="number" step="0.01"></label>
+                <button type="button" id="s-mid" class="ghost">Use mid</button>
+              </div>
+              <div id="s-summary" class="muted small"></div>
+              <div class="row actions">
+                <button type="button" id="s-preview" class="ghost">Preview risk</button>
+                <button type="submit" class="primary">Review &amp; submit</button>
+              </div>
+              <div id="s-msg" class="msg"></div>
             </form>
           </div>
         </div>

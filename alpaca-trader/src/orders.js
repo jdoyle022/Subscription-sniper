@@ -11,11 +11,31 @@ class ValidationError extends Error {
   }
 }
 
+const { isOption, parseOcc } = require('./alpaca');
+
 const SIDES = ['buy', 'sell'];
+const INTENTS = ['buy_to_open', 'buy_to_close', 'sell_to_open', 'sell_to_close'];
+const OPTION_TYPES = ['market', 'limit', 'stop', 'stop_limit'];
+const MLEG_TYPES = ['market', 'limit'];
 const TYPES = ['market', 'limit', 'stop', 'stop_limit', 'trailing_stop'];
 const TIFS = ['day', 'gtc', 'opg', 'cls', 'ioc', 'fok'];
-const CLASSES = ['simple', 'bracket', 'oco', 'oto'];
+const CLASSES = ['simple', 'bracket', 'oco', 'oto', 'mleg'];
 const SYMBOL_RE = /^[A-Z][A-Z0-9.]{0,9}(\/[A-Z]{2,6})?$/;
+const OPTION_SYMBOL_RE = /^[A-Z]{1,6}\d?\d{6}[CP]\d{8}$/;
+
+function symbolOf(value, name = 'symbol') {
+  const symbol = String(value || '').trim().toUpperCase().replace(/\s+/g, '');
+  if (!SYMBOL_RE.test(symbol) && !OPTION_SYMBOL_RE.test(symbol)) {
+    throw new ValidationError(`${name} is missing or invalid`);
+  }
+  return symbol;
+}
+
+function wholeContracts(name, value) {
+  const n = positive(name, value, { required: true });
+  if (!Number.isInteger(n)) throw new ValidationError(`${name} must be a whole number of contracts`);
+  return n;
+}
 
 function positive(name, value, { required = false } = {}) {
   if (value === undefined || value === null || value === '') {
@@ -36,9 +56,81 @@ function oneOf(name, value, allowed, fallback) {
 // Alpaca accepts decimal strings; keep them as strings to avoid float noise.
 const str = (n) => (n === undefined ? undefined : String(n));
 
+function intentOf(value, name) {
+  if (value === undefined || value === null || value === '') return undefined;
+  return oneOf(name, value, INTENTS);
+}
+
+// Multi-leg options order (Alpaca order_class "mleg"): 2-4 legs with unique symbols, a whole-number
+// strategy qty, market or limit. For limit, limit_price is the net price for one unit of the strategy.
+function normalizeMleg(input) {
+  if (input.symbol) throw new ValidationError('mleg orders take symbols on each leg, not at the top level');
+  if (input.side) throw new ValidationError('mleg orders take side/position_intent on each leg, not at the top level');
+  if (input.notional) throw new ValidationError('mleg orders require qty, not notional');
+  const qty = wholeContracts('qty', input.qty);
+  const type = oneOf('type', input.type, MLEG_TYPES, 'limit');
+  const tif = oneOf('time_in_force', input.time_in_force, ['day', 'gtc'], 'day');
+  if (!Array.isArray(input.legs) || input.legs.length < 2 || input.legs.length > 4) {
+    throw new ValidationError('mleg orders need 2 to 4 legs');
+  }
+  const legs = input.legs.map((leg, i) => {
+    if (!leg || typeof leg !== 'object') throw new ValidationError(`legs[${i}] must be an object`);
+    const symbol = symbolOf(leg.symbol, `legs[${i}].symbol`);
+    if (symbol.includes('/')) throw new ValidationError('crypto cannot be a leg of an options strategy');
+    const ratio = positive(`legs[${i}].ratio_qty`, leg.ratio_qty ?? 1, { required: true });
+    if (!Number.isInteger(ratio)) throw new ValidationError(`legs[${i}].ratio_qty must be a whole number`);
+    let side = leg.side === undefined || leg.side === '' ? undefined : oneOf(`legs[${i}].side`, leg.side, SIDES);
+    const intent = intentOf(leg.position_intent, `legs[${i}].position_intent`);
+    if (!side && !intent) throw new ValidationError(`legs[${i}] needs side or position_intent`);
+    if (!side) side = intent.startsWith('buy') ? 'buy' : 'sell';
+    if (intent && !intent.startsWith(side)) throw new ValidationError(`legs[${i}] side and position_intent disagree`);
+    const out = { symbol, ratio_qty: String(ratio), side };
+    if (intent) out.position_intent = intent;
+    return out;
+  });
+  if (new Set(legs.map((l) => l.symbol)).size !== legs.length) throw new ValidationError('mleg legs must have unique symbols');
+  if (!legs.some((l) => isOption(l.symbol))) throw new ValidationError('mleg orders need at least one option leg');
+
+  const order = { order_class: 'mleg', qty: String(qty), type, time_in_force: tif, legs };
+  if (type === 'limit') {
+    const lp = Number(input.limit_price);
+    if (input.limit_price === undefined || input.limit_price === '' || !Number.isFinite(lp) || lp === 0) {
+      throw new ValidationError('limit mleg orders need a non-zero net limit_price');
+    }
+    order.limit_price = String(lp);
+  }
+  return order;
+}
+
+function normalizeOptionOrder(input, symbol) {
+  if (input.notional) throw new ValidationError('option orders require qty (contracts), not notional');
+  const qty = wholeContracts('qty', input.qty);
+  const side = oneOf('side', input.side, SIDES);
+  const type = oneOf('type', input.type, OPTION_TYPES, 'market');
+  const tif = oneOf('time_in_force', input.time_in_force, ['day', 'gtc'], 'day');
+  const cls = oneOf('order_class', input.order_class, CLASSES, 'simple');
+  if (cls !== 'simple') throw new ValidationError('single option orders must be simple; use mleg for strategies');
+  if (input.extended_hours) throw new ValidationError('options do not trade in extended hours');
+  const order = { symbol, side, type, time_in_force: tif, qty: String(qty) };
+  if (type === 'limit' || type === 'stop_limit') {
+    order.limit_price = str(positive('limit_price', input.limit_price, { required: true }));
+  }
+  if (type === 'stop' || type === 'stop_limit') {
+    order.stop_price = str(positive('stop_price', input.stop_price, { required: true }));
+  }
+  const intent = intentOf(input.position_intent, 'position_intent');
+  if (intent) {
+    if (!intent.startsWith(side)) throw new ValidationError('side and position_intent disagree');
+    order.position_intent = intent;
+  }
+  return order;
+}
+
 function normalizeOrder(input) {
   if (!input || typeof input !== 'object') throw new ValidationError('order must be an object');
-  const symbol = String(input.symbol || '').trim().toUpperCase();
+  if (String(input.order_class || '').toLowerCase() === 'mleg') return normalizeMleg(input);
+  const symbol = symbolOf(input.symbol);
+  if (isOption(symbol)) return normalizeOptionOrder(input, symbol);
   if (!SYMBOL_RE.test(symbol)) throw new ValidationError('symbol is missing or invalid');
   const crypto = symbol.includes('/');
 
@@ -116,7 +208,22 @@ function normalizeOrder(input) {
   return order;
 }
 
+function describeLeg(symbol) {
+  const occ = parseOcc(symbol);
+  return occ ? `${occ.root} ${occ.expiration} ${occ.strike} ${occ.type.toUpperCase()}` : symbol;
+}
+
 function describeOrder(o) {
+  if (o.order_class === 'mleg') {
+    const legs = o.legs.map((l) => `${l.side.toUpperCase()} ${l.ratio_qty}x ${describeLeg(l.symbol)}`).join(' / ');
+    const px = o.limit_price ? ` @ net ${o.limit_price}` : ' @ market';
+    return `STRATEGY x${o.qty}: ${legs}${px} ${o.time_in_force}`;
+  }
+  if (isOption(o.symbol)) {
+    const intent = o.position_intent ? ` (${o.position_intent.replace(/_/g, ' ')})` : '';
+    const px = [o.limit_price && `limit ${o.limit_price}`, o.stop_price && `stop ${o.stop_price}`].filter(Boolean);
+    return `${o.side.toUpperCase()} ${o.qty} ${describeLeg(o.symbol)} ${o.type}${px.length ? ' @ ' + px.join(', ') : ''}${intent} ${o.time_in_force}`;
+  }
   const size = o.qty ? `${o.qty} ${o.symbol}` : `$${o.notional} of ${o.symbol}`;
   const px = [
     o.limit_price && `limit ${o.limit_price}`,
@@ -128,4 +235,4 @@ function describeOrder(o) {
   return `${o.side.toUpperCase()} ${size} ${o.type}${px.length ? ' @ ' + px.join(', ') : ''} ${o.time_in_force}${cls}`;
 }
 
-module.exports = { normalizeOrder, describeOrder, ValidationError };
+module.exports = { normalizeOrder, describeOrder, describeLeg, ValidationError };

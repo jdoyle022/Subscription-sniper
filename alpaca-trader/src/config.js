@@ -68,12 +68,25 @@ function loadConfig(env = process.env) {
         (mode === 'live' ? 'https://api.alpaca.markets' : 'https://paper-api.alpaca.markets'),
       dataUrl: env.ALPACA_DATA_URL || 'https://data.alpaca.markets',
       feed: env.ALPACA_DATA_FEED || 'iex',
+      optionsFeed: env.ALPACA_OPTIONS_FEED || 'indicative',
+    },
+    // Alpaca Connect (OAuth 2.0). Optional: lets you sign in with your Alpaca login instead of
+    // pasting API keys. Register an OAuth app in the Alpaca dashboard to get a client id/secret.
+    oauth: {
+      clientId: env.ALPACA_OAUTH_CLIENT_ID || '',
+      clientSecret: env.ALPACA_OAUTH_CLIENT_SECRET || '',
+      redirectUri: env.ALPACA_OAUTH_REDIRECT_URI || '',
+      scope: env.ALPACA_OAUTH_SCOPE || 'account:write trading data',
+      authorizeUrl: env.ALPACA_OAUTH_AUTHORIZE_URL || 'https://app.alpaca.markets/oauth/authorize',
+      tokenUrl: env.ALPACA_OAUTH_TOKEN_URL || 'https://api.alpaca.markets/oauth/token',
     },
     risk: {
       maxOrderNotional: num(env.MAX_ORDER_NOTIONAL, 1000),
       maxPositionPct: num(env.MAX_POSITION_PCT, 20),
       maxDailyOrders: num(env.MAX_DAILY_ORDERS, 50),
       allowShort: bool(env.ALLOW_SHORT, false),
+      optionsEnabled: bool(env.OPTIONS_ENABLED, true),
+      allowShortOptions: bool(env.ALLOW_SHORT_OPTIONS, false),
       allowlist: list(env.SYMBOL_ALLOWLIST),
       denylist: list(env.SYMBOL_DENYLIST),
     },
@@ -100,6 +113,9 @@ function loadConfig(env = process.env) {
       },
     },
   };
+  if (!cfg.oauth.redirectUri) {
+    cfg.oauth.redirectUri = `${cfg.publicUrl || `http://${cfg.host}:${cfg.port}`}`.replace(/\/$/, '') + '/oauth/callback';
+  }
   return cfg;
 }
 

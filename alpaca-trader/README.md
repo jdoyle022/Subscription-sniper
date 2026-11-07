@@ -17,9 +17,16 @@ your account and market data and **propose** trades. You approve or reject each 
 - Account summary: equity, day P/L, cash, buying power, day-trade count.
 - Positions with live P/L. Close one position, or flatten everything.
 - Orders: open, closed or all, including bracket legs. Cancel one or cancel all.
-- Order ticket for stocks, ETFs and crypto (`BTC/USD`): market, limit, stop, stop-limit,
-  trailing stop; sized by quantity or dollars; day/GTC/IOC/FOK/OPG/CLS; extended hours;
-  bracket, OCO and OTO orders with take-profit and stop-loss legs.
+- Trades everything Alpaca's Trading API offers: **stocks and ETFs, crypto, and US options**.
+  The symbol box searches tradable assets as you type.
+- Stock/crypto ticket: market, limit, stop, stop-limit, trailing stop; sized by quantity or
+  dollars; day/GTC/IOC/FOK/OPG/CLS; extended hours; bracket, OCO and OTO orders.
+- **Options tab**: pick an underlying and expiration to see the chain (bid, ask, last, IV,
+  delta). Click an ask to add a buy leg or a bid to add a sell leg. One leg sends a normal
+  option order; 2 to 4 legs send one multi-leg (`mleg`) order. That covers verticals,
+  straddles, strangles, iron condors, butterflies, calendars, and collars or covered calls
+  with a stock leg. "Use mid" fills the net price (positive = debit, negative = credit).
+- Option positions get an **Exercise** button.
 - "Preview risk" before you send. Every submission asks you to confirm, and the confirm dialog
   is red when you are in live mode.
 - A kill switch that blocks every new order. Cancels and closes still work.
@@ -40,6 +47,12 @@ your account and market data and **propose** trades. You approve or reject each 
 - A risk guard checks every order right before submission, including approved proposals. It
   checks the kill switch, allow and deny lists, the daily order cap, the maximum dollars per
   order, the maximum position size as a % of equity, and blocks shorting unless you allow it.
+- Options are sized by what they can lose. A long option is sized by premium × 100. A short
+  put is sized by strike × 100. A strategy is sized by its net debit, plus the strike width
+  of any credit spread. Short options must be covered: a call by 100 shares per contract, a
+  put by cash, or either by a long leg of the same type. Anything else is a naked short and is
+  blocked unless `ALLOW_SHORT_OPTIONS=true`. Allow and deny lists match an option's underlying
+  (`SPY` covers SPY options).
 - A proposal executes at most once. Its Alpaca `client_order_id` is derived from the proposal
   id, so Alpaca itself rejects a duplicate.
 - AI seats cannot place, cancel or change orders. The only exception is the
@@ -75,6 +88,27 @@ Edit `.env`:
 npm start
 # open http://127.0.0.1:8787 and paste your ADMIN_TOKEN
 ```
+
+### Sign in with Alpaca instead of API keys (Alpaca Connect)
+
+Alpaca Connect is Alpaca's OAuth 2.0 login. Use it instead of pasting API keys:
+
+1. Register an OAuth app in the Alpaca dashboard. Set its redirect URI to
+   `http://127.0.0.1:8787/oauth/callback`, or to `PUBLIC_URL` + `/oauth/callback`.
+2. Put the client id and secret in `ALPACA_OAUTH_CLIENT_ID` and `ALPACA_OAUTH_CLIENT_SECRET`.
+3. Restart, then click **Connect with Alpaca** in the header and approve the app on Alpaca.
+
+The token is stored in `data/oauth.json` (mode 600). It is tied to the mode it was granted for:
+a paper token is never used in live mode. **Disconnect Alpaca** deletes it. When connected,
+the OAuth token is used instead of any API keys.
+
+### Options
+
+Your Alpaca account needs an options approval level. The Options stat on the desk shows it.
+Level 1 covers covered calls and cash-secured puts, level 2 adds long calls and puts, and
+level 3 adds spreads and straddles. Free accounts get the `indicative` options feed; set
+`ALPACA_OPTIONS_FEED=opra` if you pay for real-time OPRA data. Option orders are whole
+contracts, day or GTC, with no extended hours.
 
 ### Going live
 
@@ -173,8 +207,11 @@ curl -H "Authorization: Bearer <token3>" http://127.0.0.1:8787/api/agent/proposa
 | `get_bars` | Historical OHLCV bars (1Min … 1Week) |
 | `get_clock` | Market open/close times |
 | `get_asset` | Tradable, fractionable and shortable flags |
+| `search_assets` | Find stocks/ETFs or crypto by symbol or name |
+| `get_option_contracts` | Option contracts for an underlying: expirations, strikes, open interest |
+| `get_option_chain` | Chain with quotes, IV and greeks, filtered by expiration and strike range |
 | `get_risk_limits` | The desk's limits and kill-switch state |
-| `propose_order` | Queue a proposal for your approval. Does not trade. |
+| `propose_order` | Queue a proposal for your approval. Does not trade. Stocks, crypto, single options, or 2–4 leg `mleg` strategies |
 
 ## Admin HTTP API
 
@@ -187,6 +224,12 @@ Every route needs `Authorization: Bearer <ADMIN_TOKEN>`.
 | GET | `/api/orders?status=open\|closed\|all` | |
 | GET | `/api/quote/:symbol`, `/api/bars/:symbol`, `/api/asset/:symbol` | URL-encode crypto pairs (`BTC%2FUSD`) |
 | GET | `/api/portfolio-history?period=1M&timeframe=1D`, `/api/activities` | |
+| GET | `/api/assets?asset_class=us_equity\|crypto&q=` | Asset search |
+| GET | `/api/options/expirations/:underlying` | Listed expiration dates |
+| GET | `/api/options/chain/:underlying?expiration_date=&strike_price_gte=&strike_price_lte=&type=` | Chain with greeks |
+| GET | `/api/options/contracts?underlying=&type=&expiration_date=` | Contract list |
+| POST | `/api/positions/:symbol/exercise` | Exercise an option position |
+| GET / POST | `/api/oauth/start`, `/api/oauth/disconnect` | Alpaca Connect |
 | POST | `/api/orders/preview` | Validate and risk-check without sending |
 | POST | `/api/orders` | Place an order |
 | PATCH / DELETE | `/api/orders/:id` | Replace or cancel |
@@ -209,7 +252,11 @@ The tests use a fake Alpaca backend and stub AI clients, so they need no keys or
 
 ## Limits and notes
 
-- Options trading is not wired in yet. Stocks, ETFs and crypto are.
+- Alpaca's Trading API covers stocks/ETFs, crypto and options, and all three are wired in.
+  Bonds and treasuries are offered through Alpaca's Broker API, not the Trading API, so they
+  are not included.
+- Covered-call coverage counts the shares you hold, but not shares already covering other
+  short calls. Watch for that if you write several covered calls on the same stock.
 - Market data defaults to the free IEX feed. Set `ALPACA_DATA_FEED=sip` if you pay for SIP.
 - State is a JSON file in `data/`. This is a single-user desk, not a multi-tenant service.
 - If the process dies while a proposal is executing, the proposal stays `executing`. Check

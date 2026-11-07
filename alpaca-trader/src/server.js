@@ -10,15 +10,19 @@ const { RiskGuard } = require('./risk');
 const { TradingDesk } = require('./desk');
 const { createAgents } = require('./agents');
 const { createApp } = require('./app');
+const { AlpacaConnect } = require('./oauth');
 
 function build(config, overrides = {}) {
   const alpaca = overrides.alpaca || new AlpacaClient(config.alpaca);
   const store = overrides.store || new Store(config.dataDir);
   const risk = new RiskGuard(config.risk, alpaca, store);
   const desk = new TradingDesk({ alpaca, store, risk, config });
+  const connect =
+    overrides.connect ||
+    new AlpacaConnect({ oauth: config.oauth, mode: config.alpaca.mode, dataDir: config.dataDir }, alpaca, store);
   const agents = createAgents(config.ai, overrides.agents);
-  const handler = createApp({ config, alpaca, store, desk, agents });
-  return { alpaca, store, risk, desk, agents, handler };
+  const handler = createApp({ config, alpaca, store, desk, agents, connect });
+  return { alpaca, store, risk, desk, agents, connect, handler };
 }
 
 if (require.main === module) {

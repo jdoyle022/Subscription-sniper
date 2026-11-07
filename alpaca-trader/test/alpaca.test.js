@@ -51,3 +51,34 @@ test('unconfigured client refuses', async () => {
   const c = new AlpacaClient({ keyId: '', secretKey: '', tradingUrl: 'x', dataUrl: 'y' });
   await assert.rejects(c.getAccount(), { status: 503 });
 });
+
+test('OAuth token is sent as Bearer and replaces key headers', async () => {
+  const { c, calls } = client(() => ({ body: {} }));
+  c.setOAuthToken('tok');
+  await c.getAccount();
+  assert.equal(calls[0].opts.headers.Authorization, 'Bearer tok');
+  assert.equal(calls[0].opts.headers['APCA-API-KEY-ID'], undefined);
+  assert.equal(c.authMethod, 'oauth');
+});
+
+test('options data: chain pagination, OCC parsing, option reference price uses quote mid', async () => {
+  const { parseOcc, isOption, assetClassOf } = require('../src/alpaca');
+  assert.deepEqual(parseOcc('SPY261218C00500000'), { root: 'SPY', expiration: '2026-12-18', type: 'call', strike: 500 });
+  assert.deepEqual(parseOcc('AAPL1261218P00012500'), { root: 'AAPL', expiration: '2026-12-18', type: 'put', strike: 12.5 });
+  assert.equal(isOption('AAPL'), false);
+  assert.equal(assetClassOf('BTC/USD'), 'crypto');
+
+  const { c, calls } = client((url) => {
+    if (url.includes('/options/snapshots/SPY')) {
+      return url.includes('page_token=n1')
+        ? { body: { snapshots: { B: { greeks: {} } } } }
+        : { body: { snapshots: { A: { greeks: {} } }, next_page_token: 'n1' } };
+    }
+    if (url.includes('/options/quotes/latest')) return { body: { quotes: { SPY261218C00500000: { bp: 1, ap: 1.2 } } } };
+    return { body: {} };
+  });
+  const chain = await c.getOptionChain('SPY', { expiration_date: '2026-12-18' });
+  assert.deepEqual(Object.keys(chain), ['A', 'B']);
+  assert.match(calls[0].url, /v1beta1\/options\/snapshots\/SPY\?feed=indicative/);
+  assert.equal(await c.getReferencePrice('SPY261218C00500000'), 1.1);
+});

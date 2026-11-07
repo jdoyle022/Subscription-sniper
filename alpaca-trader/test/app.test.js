@@ -99,3 +99,103 @@ test('AI chat route uses configured seats', async (t) => {
   assert.equal(r.json[0].proposals.length, 1);
   assert.equal((await s.call('POST', '/api/ai/chat', { token: ADMIN, body: { provider: 'grok', message: 'go' } })).status, 400);
 });
+
+test('options: expirations (paginated), chain, contracts, exercise, asset search', async (t) => {
+  const ctx = setup();
+  const s = await serve(ctx);
+  t.after(s.close);
+  const exps = await s.call('GET', '/api/options/expirations/spy', { token: ADMIN });
+  assert.deepEqual(exps.json, ['2026-12-18', '2027-01-15']);
+  const chain = await s.call('GET', '/api/options/chain/SPY?expiration_date=2026-12-18&strike_price_gte=450', { token: ADMIN });
+  assert.equal(chain.json.length, 2);
+  assert.deepEqual(chain.json.map((r) => r.type), ['put', 'call']); // sorted by strike
+  assert.equal(chain.json[1].delta, 0.52);
+  assert.equal(ctx.alpaca.lastChainQuery.strike_price_gte, '450');
+  const contracts = await s.call('GET', '/api/options/contracts?underlying=SPY&type=call', { token: ADMIN });
+  assert.equal(contracts.json[0].symbol, 'SPY261218C00500000');
+  assert.equal(ctx.alpaca.lastContractQuery.type, 'call');
+
+  assert.equal((await s.call('POST', '/api/positions/AAPL/exercise', { token: ADMIN })).status, 400);
+  assert.equal((await s.call('POST', '/api/positions/SPY261218C00500000/exercise', { token: AGENT })).status, 403);
+  assert.equal((await s.call('POST', '/api/positions/SPY261218C00500000/exercise', { token: ADMIN })).status, 200);
+  assert.deepEqual(ctx.alpaca.exercised, ['SPY261218C00500000']);
+
+  const assets = await s.call('GET', '/api/assets?q=apple', { token: ADMIN });
+  assert.deepEqual(assets.json.map((a) => a.symbol), ['AAPL']); // non-tradable filtered out
+});
+
+test('agent proposes a multi-leg spread; human approves; it executes as mleg', async (t) => {
+  const ctx = setup();
+  const s = await serve(ctx);
+  t.after(s.close);
+  const r = await s.call('POST', '/api/agent/tools/propose_order', {
+    token: AGENT,
+    body: {
+      order_class: 'mleg', qty: 1, type: 'limit', limit_price: -3,
+      legs: [{ symbol: 'SPY261218P00490000', side: 'sell', ratio_qty: 1 }, { symbol: 'SPY261218P00480000', side: 'buy', ratio_qty: 1 }],
+      rationale: 'Bull put spread; max loss $700.',
+    },
+  });
+  assert.equal(r.json.ok, true, r.json.error);
+  assert.equal(r.json.result.risk_preview.ok, true, JSON.stringify(r.json.result.risk_preview));
+  assert.match(r.json.result.summary, /STRATEGY x1/);
+  const ap = await s.call('POST', `/api/proposals/${r.json.result.proposal_id}/approve`, { token: ADMIN });
+  assert.equal(ap.status, 200);
+  const sent = ctx.alpaca.submitted[0];
+  assert.equal(sent.order_class, 'mleg');
+  assert.equal(sent.legs.length, 2);
+  assert.equal(sent.symbol, undefined);
+});
+
+test('Alpaca Connect: start issues state, callback exchanges code once', async (t) => {
+  const { AlpacaConnect } = require('../src/oauth');
+  const tokenCalls = [];
+  const ctx0 = setup({ env: { ALPACA_OAUTH_CLIENT_ID: 'cid', ALPACA_OAUTH_CLIENT_SECRET: 'csecret' } });
+  const connect = new AlpacaConnect(
+    { oauth: ctx0.config.oauth, mode: 'paper', dataDir: ctx0.config.dataDir },
+    ctx0.alpaca,
+    ctx0.store,
+    async (url, opts) => {
+      tokenCalls.push({ url: String(url), body: new URLSearchParams(opts.body) });
+      return { ok: true, status: 200, json: async () => ({ access_token: 'tok-123', token_type: 'bearer', scope: 'account:write trading data' }) };
+    },
+  );
+  const { build } = require('../src/server');
+  const ctx = build(ctx0.config, { alpaca: ctx0.alpaca, store: ctx0.store, connect });
+  const s = await serve(ctx);
+  t.after(s.close);
+
+  const st = await s.call('GET', '/api/oauth/start', { token: ADMIN });
+  const url = new URL(st.json.url);
+  assert.equal(url.origin + url.pathname, 'https://app.alpaca.markets/oauth/authorize');
+  assert.equal(url.searchParams.get('client_id'), 'cid');
+  assert.equal(url.searchParams.get('env'), 'paper');
+  assert.equal(url.searchParams.get('response_type'), 'code');
+  const state = url.searchParams.get('state');
+
+  assert.equal((await s.call('GET', '/oauth/callback?code=abc&state=forged')).status, 400);
+  assert.equal(tokenCalls.length, 0);
+  const cb = await s.call('GET', `/oauth/callback?code=abc&state=${state}`);
+  assert.equal(cb.status, 200);
+  assert.match(cb.text, /Connected/);
+  assert.equal(tokenCalls[0].body.get('grant_type'), 'authorization_code');
+  assert.equal(tokenCalls[0].body.get('client_secret'), 'csecret');
+  assert.equal(ctx0.alpaca.oauthToken, 'tok-123');
+  // state is single-use
+  assert.equal((await s.call('GET', `/oauth/callback?code=abc&state=${state}`)).status, 400);
+
+  const status = await s.call('GET', '/api/status', { token: ADMIN });
+  assert.equal(status.json.connect.connected, true);
+  assert.equal(status.json.authMethod, 'oauth');
+  const fs = require('node:fs');
+  const file = require('node:path').join(ctx0.config.dataDir, 'oauth.json');
+  assert.equal(fs.statSync(file).mode & 0o777, 0o600);
+
+  // A paper token is not loaded in live mode.
+  const live = new AlpacaConnect({ oauth: ctx0.config.oauth, mode: 'live', dataDir: ctx0.config.dataDir }, { setOAuthToken() { throw new Error('must not load'); } }, ctx0.store);
+  assert.equal(live.status.connected, false);
+
+  await s.call('POST', '/api/oauth/disconnect', { token: ADMIN });
+  assert.equal(ctx0.alpaca.oauthToken, '');
+  assert.equal(fs.existsSync(file), false);
+});

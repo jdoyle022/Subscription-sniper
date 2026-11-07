@@ -2,6 +2,7 @@
 
 const crypto = require('node:crypto');
 const { normalizeOrder, describeOrder } = require('./orders');
+const { isOption } = require('./alpaca');
 
 class DeskError extends Error {
   constructor(status, message, details) {
@@ -69,14 +70,28 @@ class TradingDesk {
 
     // A replacement is a new order as far as risk is concerned: re-check the resulting order.
     const existing = await this.alpaca.getOrder(id);
-    const candidate = {
-      symbol: existing.symbol,
-      side: existing.side,
-      qty: clean.qty || existing.qty || undefined,
-      notional: clean.qty ? undefined : existing.notional || undefined,
-      limit_price: clean.limit_price || existing.limit_price || undefined,
-      stop_price: clean.stop_price || existing.stop_price || undefined,
-    };
+    const candidate =
+      existing.order_class === 'mleg'
+        ? {
+            order_class: 'mleg',
+            qty: clean.qty || existing.qty,
+            limit_price: clean.limit_price || existing.limit_price || undefined,
+            legs: (existing.legs || []).map((l) => ({
+              symbol: l.symbol,
+              side: l.side,
+              ratio_qty: l.ratio_qty,
+              position_intent: l.position_intent,
+            })),
+          }
+        : {
+            symbol: existing.symbol,
+            side: existing.side,
+            qty: clean.qty || existing.qty || undefined,
+            notional: clean.qty ? undefined : existing.notional || undefined,
+            limit_price: clean.limit_price || existing.limit_price || undefined,
+            stop_price: clean.stop_price || existing.stop_price || undefined,
+            position_intent: existing.position_intent || undefined,
+          };
     const check = await this.risk.check(candidate);
     if (!check.ok) {
       this.store.audit('order.replace_blocked', { actor, id, patch: clean, reasons: check.reasons });
@@ -91,6 +106,13 @@ class TradingDesk {
     const res = await this.alpaca.closePosition(symbol, opts);
     this.store.audit('position.close', { actor, symbol, ...opts });
     return res;
+  }
+
+  async exerciseOption(symbol, { actor }) {
+    if (!isOption(symbol)) throw new DeskError(400, 'Only option positions can be exercised');
+    const res = await this.alpaca.exerciseOption(symbol);
+    this.store.audit('option.exercise', { actor, symbol });
+    return res || { ok: true };
   }
 
   async closeAllPositions({ actor }) {

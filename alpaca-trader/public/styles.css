@@ -125,3 +125,19 @@ dialog form { display: grid; gap: 12px; }
 
 .toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: var(--panel-2); border: 1px solid var(--border); padding: 10px 16px; border-radius: 8px; max-width: calc(100% - 32px); z-index: 10; }
 .toast.err { border-color: var(--down); }
+
+/* options */
+table.chain td, table.chain th { padding: 5px 6px; font-size: 13px; }
+table.chain td.strike { text-align: center; font-weight: 700; background: var(--panel-2); }
+table.chain td.itm { background: rgba(76,141,255,.07); }
+table.chain td.pick { cursor: pointer; color: var(--text); text-decoration: underline dotted var(--muted); }
+table.chain td.pick:hover { background: rgba(76,141,255,.2); }
+table.chain th.side-head { text-align: center; color: var(--text); }
+.legs { display: grid; gap: 8px; margin-bottom: 10px; }
+.leg { display: grid; grid-template-columns: auto 1fr auto auto; gap: 8px; align-items: center; border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; }
+.leg input { width: 56px; }
+.leg .desc { overflow-wrap: anywhere; }
+.leg button.side-toggle { min-width: 52px; font-weight: 700; }
+.leg button.side-toggle.buy { color: var(--up); border-color: var(--up); }
+.leg button.side-toggle.sell { color: var(--down); border-color: var(--down); }
+#t-class { align-self: end; }

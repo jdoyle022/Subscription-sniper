@@ -34,6 +34,15 @@
   const pct = (v) => (Number.isFinite(Number(v)) ? `${(Number(v) * 100).toFixed(2)}%` : '—');
   const signClass = (v) => (Number(v) > 0 ? 'up' : Number(v) < 0 ? 'down' : '');
   const time = (s) => (s ? new Date(s).toLocaleString() : '—');
+  const OCC = /^([A-Z]{1,6})\d?(\d{2})(\d{2})(\d{2})([CP])(\d{8})$/;
+  function parseOcc(sym) {
+    const m = OCC.exec(sym || '');
+    return m ? { root: m[1], exp: `20${m[2]}-${m[3]}-${m[4]}`, type: m[5] === 'C' ? 'call' : 'put', strike: Number(m[6]) / 1000 } : null;
+  }
+  function describeOcc(sym) {
+    const o = parseOcc(sym);
+    return o ? `${o.root} ${o.exp} ${o.strike} ${o.type === 'call' ? 'C' : 'P'}` : sym;
+  }
 
   function toast(msg, isErr = false) {
     const t = $('#toast');
@@ -134,7 +143,13 @@
     $('#ai-note').textContent = names.length
       ? `Seats can read data and propose orders. You approve every trade${s.aiAutoExecute ? ' (except: paper auto-execute is ON)' : ''}. External agents: ${s.externalAgents.join(', ') || 'none'}.`
       : 'No AI seats configured. Add ANTHROPIC_API_KEY, OPENAI_API_KEY and/or XAI_API_KEY to .env.';
-    if (!s.alpacaConfigured) toast('Alpaca keys missing: set ALPACA_KEY_ID and ALPACA_SECRET_KEY in .env', true);
+    const cb = $('#connect-btn');
+    cb.hidden = !s.connect.enabled;
+    cb.textContent = s.connect.connected ? 'Disconnect Alpaca' : 'Connect with Alpaca';
+    cb.dataset.connected = s.connect.connected ? '1' : '';
+    if (!s.alpacaConfigured) {
+      toast(s.connect.enabled ? 'Not connected: click "Connect with Alpaca"' : 'Alpaca keys missing: set ALPACA_KEY_ID and ALPACA_SECRET_KEY in .env', true);
+    }
   }
 
   async function loadClock() {
@@ -147,6 +162,23 @@
       $('#clock').textContent = '';
     }
   }
+
+  $('#connect-btn').addEventListener('click', async (e) => {
+    try {
+      if (e.target.dataset.connected) {
+        const ok = await confirmDialog('Disconnect Alpaca?', [el('p', {}, 'The stored OAuth token is deleted. API keys in .env, if any, are used again.')], 'Disconnect', true);
+        if (!ok) return;
+        await api('POST', '/api/oauth/disconnect');
+        toast('Disconnected');
+        loadStatus();
+      } else {
+        const { url } = await api('GET', '/api/oauth/start');
+        window.location.assign(url);
+      }
+    } catch (err) {
+      toast(err.message, true);
+    }
+  });
 
   $('#kill-switch').addEventListener('change', async (e) => {
     const on = e.target.checked;
@@ -171,6 +203,7 @@
       stat('Cash', money(a.cash)),
       stat('Buying power', money(a.buying_power)),
       stat('Day trades (5d)', `${a.daytrade_count ?? '—'}${a.pattern_day_trader ? ' · PDT' : ''}`),
+      stat('Options', a.options_trading_level === undefined ? '—' : `Level ${a.options_trading_level} · ${money(a.options_buying_power, 0)}`),
     );
   }
 
@@ -192,7 +225,7 @@
       ],
       ps.map((p) =>
         el('tr', {},
-          el('td', {}, el('strong', {}, p.symbol)),
+          el('td', {}, el('strong', {}, p.asset_class === 'us_option' ? describeOcc(p.symbol) : p.symbol), p.asset_class && p.asset_class !== 'us_equity' ? el('span', { class: 'muted small' }, ` ${p.asset_class === 'us_option' ? 'option' : p.asset_class}`) : ''),
           el('td', { class: 'num' }, p.qty),
           el('td', { class: 'num' }, money(p.avg_entry_price)),
           el('td', { class: 'num' }, money(p.current_price)),
@@ -200,6 +233,8 @@
           el('td', { class: `num ${signClass(p.unrealized_pl)}` }, `${money(p.unrealized_pl)} (${pct(p.unrealized_plpc)})`),
           el('td', {},
             el('button', { class: 'ghost small', onclick: () => fillTicket(p.symbol) }, 'Trade'), ' ',
+            p.asset_class === 'us_option' && Number(p.qty) > 0 ? el('button', { class: 'ghost small', onclick: () => exercise(p) }, 'Exercise') : '',
+            p.asset_class === 'us_option' && Number(p.qty) > 0 ? ' ' : '',
             el('button', { class: 'danger small', onclick: () => closePosition(p) }, 'Close'),
           ),
         ),
@@ -214,6 +249,21 @@
     try {
       await api('DELETE', `/api/positions/${encodeURIComponent(p.symbol)}`);
       toast(`Close order sent for ${p.symbol}`);
+      refreshDesk();
+    } catch (err) {
+      toast(err.message, true);
+    }
+  }
+
+  async function exercise(p) {
+    const ok = await confirmDialog(`Exercise ${describeOcc(p.symbol)}?`, [
+      el('p', {}, `Exercises all ${p.qty} held contract(s) into the underlying (${Number(p.qty) * 100} shares).`),
+      el('p', { class: 'muted' }, 'Alpaca exercises in-the-money contracts automatically at expiry. Early exercise usually gives up remaining time value.'),
+    ], 'Exercise', true);
+    if (!ok) return;
+    try {
+      await api('POST', `/api/positions/${encodeURIComponent(p.symbol)}/exercise`);
+      toast('Exercise submitted');
       refreshDesk();
     } catch (err) {
       toast(err.message, true);
@@ -249,8 +299,8 @@
       flat.map((o) =>
         el('tr', {},
           el('td', { class: 'muted' }, o._leg ? '  └ leg' : time(o.submitted_at)),
-          el('td', {}, o.symbol),
-          el('td', { class: o.side === 'buy' ? 'up' : 'down' }, o.side),
+          el('td', {}, o.order_class === 'mleg' && !o._leg ? 'strategy' : describeOcc(o.symbol)),
+          el('td', { class: o.side === 'buy' ? 'up' : 'down' }, o.side || ''),
           el('td', {}, `${o.type}${o.order_class && o.order_class !== 'simple' && !o._leg ? ` (${o.order_class})` : ''}`),
           el('td', { class: 'num' }, o.qty || (o.notional ? money(o.notional) : '—')),
           el('td', { class: 'num' }, `${o.filled_qty}${o.filled_avg_price ? ' @ ' + money(o.filled_avg_price) : ''}`),
@@ -347,6 +397,18 @@
     }
   }
   $('#quote-btn').addEventListener('click', lookupQuote);
+  let searchTimer;
+  $('#t-symbol').addEventListener('input', () => {
+    clearTimeout(searchTimer);
+    const q = $('#t-symbol').value.trim();
+    if (q.length < 1 || parseOcc(q.toUpperCase())) return;
+    searchTimer = setTimeout(async () => {
+      try {
+        const hits = await api('GET', `/api/assets?asset_class=${$('#t-class').value}&q=${encodeURIComponent(q)}&limit=15`);
+        $('#asset-list').replaceChildren(...hits.map((a) => el('option', { value: a.symbol }, a.name || '')));
+      } catch { /* search is best-effort */ }
+    }, 250);
+  });
   $('#t-symbol').addEventListener('keydown', (e) => {
     if (e.key === 'Enter') { e.preventDefault(); lookupQuote(); }
   });
@@ -429,6 +491,193 @@
     } catch (err) {
       const reasons = (err.details && err.details.reasons) || [];
       $('#ticket-msg').replaceChildren(el('span', { class: 'down' }, err.message), reasons.length ? el('ul', {}, reasons.map((r) => el('li', {}, r))) : '');
+    }
+  });
+
+
+  // ---------- options ----------
+  const opt = { spot: null, chain: [], legs: [] };
+  const mid = (r) => {
+    const b = Number(r.bid), a = Number(r.ask);
+    if (b > 0 && a > 0) return (a + b) / 2;
+    return a > 0 ? a : b > 0 ? b : Number(r.last) || 0;
+  };
+  const fmt = (v, d = 2) => (v === undefined || v === null || v === '' || !Number.isFinite(Number(v)) ? '—' : Number(v).toFixed(d));
+
+  $('#chain-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const u = $('#o-under').value.trim().toUpperCase();
+    if (!u) return;
+    $('#o-exp').replaceChildren(el('option', {}, 'Loading…'));
+    try {
+      const [exps, snap] = await Promise.all([
+        api('GET', `/api/options/expirations/${encodeURIComponent(u)}`),
+        api('GET', `/api/quote/${encodeURIComponent(u)}`).catch(() => null),
+      ]);
+      opt.spot = snap && snap.latestTrade ? Number(snap.latestTrade.p) : null;
+      $('#o-spot').textContent = opt.spot ? `${u} ${money(opt.spot)}` : u;
+      $('#o-exp').replaceChildren(...(exps.length ? exps.map((d) => el('option', { value: d }, d)) : [el('option', { value: '' }, 'No listed options')]));
+      if (exps.length) loadChain();
+    } catch (err) {
+      $('#o-exp').replaceChildren();
+      toast(err.message, true);
+    }
+  });
+  $('#o-load').addEventListener('click', () => loadChain());
+  $('#o-exp').addEventListener('change', () => loadChain());
+  $('#o-range').addEventListener('change', () => loadChain());
+
+  async function loadChain() {
+    const u = $('#o-under').value.trim().toUpperCase();
+    const exp = $('#o-exp').value;
+    if (!u || !exp) return;
+    const pct = Number($('#o-range').value);
+    const qs = new URLSearchParams({ expiration_date: exp });
+    if (opt.spot) {
+      qs.set('strike_price_gte', (opt.spot * (1 - pct)).toFixed(2));
+      qs.set('strike_price_lte', (opt.spot * (1 + pct)).toFixed(2));
+    }
+    try {
+      opt.chain = await api('GET', `/api/options/chain/${encodeURIComponent(u)}?${qs}`);
+      renderChain();
+    } catch (err) {
+      toast(err.message, true);
+    }
+  }
+
+  function renderChain() {
+    const byStrike = new Map();
+    for (const r of opt.chain) {
+      if (!byStrike.has(r.strike)) byStrike.set(r.strike, {});
+      byStrike.get(r.strike)[r.type] = r;
+    }
+    const strikes = [...byStrike.keys()].sort((a, b) => a - b);
+    const cols = ['Bid', 'Ask', 'Last', 'IV', 'Δ'];
+    const thead = el('thead', {},
+      el('tr', {}, el('th', { class: 'side-head', colspan: 5 }, 'Calls'), el('th', {}), el('th', { class: 'side-head', colspan: 5 }, 'Puts')),
+      el('tr', {}, ...cols.map((c) => el('th', { class: 'num' }, c)), el('th', { class: 'num' }, 'Strike'), ...cols.map((c) => el('th', { class: 'num' }, c))),
+    );
+    const cells = (r, itm) => {
+      if (!r) return cols.map(() => el('td', { class: 'num muted' }, ''));
+      const c = itm ? 'num itm' : 'num';
+      return [
+        el('td', { class: `${c} pick`, title: 'Sell this contract', onclick: () => addLeg(r, 'sell') }, fmt(r.bid)),
+        el('td', { class: `${c} pick`, title: 'Buy this contract', onclick: () => addLeg(r, 'buy') }, fmt(r.ask)),
+        el('td', { class: c }, fmt(r.last)),
+        el('td', { class: c }, r.iv ? `${(r.iv * 100).toFixed(1)}%` : '—'),
+        el('td', { class: c }, fmt(r.delta, 2)),
+      ];
+    };
+    const tbody = el('tbody');
+    if (!strikes.length) tbody.append(el('tr', {}, el('td', { class: 'empty', colspan: 11 }, 'No contracts in this range')));
+    for (const k of strikes) {
+      const row = byStrike.get(k);
+      const spot = opt.spot || 0;
+      tbody.append(el('tr', {}, ...cells(row.call, spot && k < spot), el('td', { class: 'strike' }, fmt(k)), ...cells(row.put, spot && k > spot)));
+    }
+    $('#chain').replaceChildren(thead, tbody);
+  }
+
+  function addLeg(r, side) {
+    const existing = opt.legs.find((l) => l.symbol === r.symbol);
+    if (existing) existing.side = side;
+    else if (opt.legs.length >= 4) return toast('Strategies can have at most 4 legs', true);
+    else opt.legs.push({ symbol: r.symbol, side, ratio: 1, mid: mid(r), bid: r.bid, ask: r.ask });
+    renderLegs();
+  }
+
+  function netMid() {
+    return opt.legs.reduce((sum, l) => sum + (l.side === 'buy' ? 1 : -1) * l.mid * l.ratio, 0);
+  }
+
+  function renderLegs() {
+    const box = $('#legs');
+    if (!opt.legs.length) {
+      box.replaceChildren(el('p', { class: 'muted' }, 'No legs yet. Pick contracts from the chain (up to 4).'));
+      $('#s-summary').textContent = '';
+      return;
+    }
+    box.replaceChildren(...opt.legs.map((l, i) =>
+      el('div', { class: 'leg' },
+        el('button', { type: 'button', class: `side-toggle ${l.side}`, onclick: () => { l.side = l.side === 'buy' ? 'sell' : 'buy'; renderLegs(); } }, l.side.toUpperCase()),
+        el('span', { class: 'desc' }, describeOcc(l.symbol), el('span', { class: 'muted small' }, `  mid ${fmt(l.mid)}`)),
+        el('input', { type: 'number', min: '1', step: '1', value: String(l.ratio), title: 'Ratio', onchange: (e) => { l.ratio = Math.max(1, Math.round(Number(e.target.value) || 1)); renderLegs(); } }),
+        el('button', { type: 'button', class: 'ghost small', title: 'Remove', onclick: () => { opt.legs.splice(i, 1); renderLegs(); } }, '✕'),
+      ),
+    ));
+    const n = netMid();
+    const q = Math.max(1, Number($('#s-qty').value) || 1);
+    $('#s-summary').textContent = `Net at mid: ${n >= 0 ? 'debit' : 'credit'} ${money(Math.abs(n))} per unit = ${money(Math.abs(n) * 100 * q)} total for ${q} unit(s).`;
+  }
+  $('#s-qty').addEventListener('input', renderLegs);
+  $('#s-mid').addEventListener('click', () => {
+    if (!opt.legs.length) return;
+    const n = opt.legs.length === 1 ? opt.legs[0].mid : netMid();
+    $('#s-limit').value = n.toFixed(2);
+  });
+  $('#s-clear').addEventListener('click', () => { opt.legs = []; renderLegs(); $('#s-msg').replaceChildren(); });
+
+  function buildStrategy() {
+    if (!opt.legs.length) throw new Error('Add at least one leg');
+    const qty = Math.max(1, Math.round(Number($('#s-qty').value) || 1));
+    const type = $('#s-type').value;
+    const tif = $('#s-tif').value;
+    const limit = $('#s-limit').value;
+    if (opt.legs.length === 1) {
+      const l = opt.legs[0];
+      const o = { symbol: l.symbol, side: l.side, qty: qty * l.ratio, type, time_in_force: tif };
+      if (type === 'limit') o.limit_price = Math.abs(Number(limit));
+      return o;
+    }
+    const o = { order_class: 'mleg', qty, type, time_in_force: tif, legs: opt.legs.map((l) => ({ symbol: l.symbol, side: l.side, ratio_qty: l.ratio })) };
+    if (type === 'limit') o.limit_price = limit;
+    return o;
+  }
+
+  async function previewStrategy() {
+    const order = buildStrategy();
+    const r = await api('POST', '/api/orders/preview', order);
+    const est = r.risk.estimate || {};
+    $('#s-msg').replaceChildren(
+      el('div', { class: r.risk.ok ? 'up' : 'down' }, r.risk.ok ? 'Passes risk checks.' : 'Blocked by risk guard:', est.notional ? ` Sized at ${money(est.notional)}.` : ''),
+      r.risk.reasons.length ? el('ul', {}, r.risk.reasons.map((x) => el('li', {}, x))) : '',
+    );
+    return r;
+  }
+  $('#s-preview').addEventListener('click', () => previewStrategy().catch((err) => $('#s-msg').replaceChildren(el('span', { class: 'down' }, err.message))));
+
+  $('#strategy').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    let preview;
+    try {
+      preview = await previewStrategy();
+    } catch (err) {
+      $('#s-msg').replaceChildren(el('span', { class: 'down' }, err.message));
+      return;
+    }
+    if (!preview.risk.ok) return;
+    const o = preview.order;
+    const live = state.status && state.status.mode === 'live';
+    const lines = o.order_class === 'mleg'
+      ? o.legs.map((l) => el('p', {}, `${l.side.toUpperCase()} ${l.ratio_qty}× ${describeOcc(l.symbol)}`))
+      : [el('p', {}, `${o.side.toUpperCase()} ${o.qty} × ${describeOcc(o.symbol)}`)];
+    const price = o.limit_price
+      ? o.order_class === 'mleg'
+        ? `Net ${Number(o.limit_price) >= 0 ? 'debit' : 'credit'} ${money(Math.abs(o.limit_price))} per unit × ${o.qty}`
+        : `Limit ${money(o.limit_price)} per share`
+      : 'Market order';
+    const ok = await confirmDialog(live ? 'Submit LIVE options order (real money)' : 'Submit paper options order',
+      [...lines, el('p', { class: 'muted' }, `${price} · ${o.time_in_force}`), el('p', {}, `Sized at ${money(preview.risk.estimate.notional)}`)],
+      live ? 'Send live order' : 'Send order', live);
+    if (!ok) return;
+    try {
+      const res = await api('POST', '/api/orders', o);
+      $('#s-msg').replaceChildren(el('span', { class: 'up' }, `Order ${res.status}: ${res.id}`));
+      toast('Options order submitted');
+      setTimeout(refreshDesk, 800);
+    } catch (err) {
+      const reasons = (err.details && err.details.reasons) || [];
+      $('#s-msg').replaceChildren(el('span', { class: 'down' }, err.message), reasons.length ? el('ul', {}, reasons.map((r) => el('li', {}, r))) : '');
     }
   });
 

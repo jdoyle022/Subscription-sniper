@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { normalizeOrder } = require('./orders');
-const { TOOLS, makeToolRunner } = require('./tools');
+const { TOOLS, makeToolRunner, trimChainEntry } = require('./tools');
 const { runAgents } = require('./agents');
 const { AlpacaError } = require('./alpaca');
 
@@ -108,7 +108,7 @@ function openApiSpec(publicUrl) {
   };
 }
 
-function createApp({ config, alpaca, store, desk, agents }) {
+function createApp({ config, alpaca, store, desk, agents, connect }) {
   const runTool = makeToolRunner({ alpaca, desk, config });
   const limiter = makeAuthLimiter();
 
@@ -137,6 +137,8 @@ function createApp({ config, alpaca, store, desk, agents }) {
   route('GET', '/api/status', 'admin', async () => ({
     mode: config.alpaca.mode,
     alpacaConfigured: alpaca.configured,
+    authMethod: alpaca.authMethod,
+    connect: connect ? connect.status : { enabled: false, connected: false },
     killSwitch: store.state.killSwitch,
     aiAutoExecute: config.ai.autoExecute,
     providers: Object.fromEntries(Object.entries(agents).map(([k, a]) => [k, a.model])),
@@ -171,6 +173,54 @@ function createApp({ config, alpaca, store, desk, agents }) {
     return r.result;
   });
   route('GET', '/api/asset/:symbol', 'admin', (ctx) => alpaca.getAsset(ctx.params.symbol.toUpperCase()));
+
+  const tool = async (name, input) => {
+    const r = await runTool(name, input, { agent: 'human' });
+    if (!r.ok) throw Object.assign(new Error(r.error), { status: 502 });
+    return r.result;
+  };
+  route('GET', '/api/assets', 'admin', (ctx) =>
+    tool('search_assets', {
+      asset_class: ctx.query.get('asset_class') || 'us_equity',
+      query: ctx.query.get('q') || '',
+      limit: Number(ctx.query.get('limit')) || 25,
+    }),
+  );
+  route('GET', '/api/options/contracts', 'admin', (ctx) => tool('get_option_contracts', Object.fromEntries(ctx.query)));
+  route('GET', '/api/options/expirations/:underlying', 'admin', async (ctx) => {
+    const today = new Date().toISOString().slice(0, 10);
+    const seen = new Set();
+    let pageToken;
+    for (let page = 0; page < 5; page++) {
+      const d = await alpaca.listOptionContracts({
+        underlying_symbols: ctx.params.underlying.toUpperCase(),
+        expiration_date_gte: today,
+        limit: 10000,
+        page_token: pageToken,
+      });
+      for (const c of d.option_contracts || []) seen.add(c.expiration_date);
+      pageToken = d.next_page_token;
+      if (!pageToken) break;
+    }
+    return [...seen].sort();
+  });
+  route('GET', '/api/options/chain/:underlying', 'admin', async (ctx) => {
+    const q = Object.fromEntries(ctx.query);
+    const chain = await alpaca.getOptionChain(ctx.params.underlying.toUpperCase(), {
+      type: q.type,
+      expiration_date: q.expiration_date,
+      strike_price_gte: q.strike_price_gte,
+      strike_price_lte: q.strike_price_lte,
+    });
+    return Object.entries(chain)
+      .map(([sym, snap]) => trimChainEntry(sym, snap))
+      .sort((a, b) => a.strike - b.strike || a.type.localeCompare(b.type));
+  });
+  route('POST', '/api/positions/:symbol/exercise', 'admin', (ctx) =>
+    desk.exerciseOption(ctx.params.symbol.toUpperCase(), { actor: 'human' }),
+  );
+  route('GET', '/api/oauth/start', 'admin', () => connect.start());
+  route('POST', '/api/oauth/disconnect', 'admin', () => connect.disconnect());
 
   route('POST', '/api/orders/preview', 'admin', async (ctx) => {
     const order = normalizeOrder(ctx.body);
@@ -252,6 +302,35 @@ function createApp({ config, alpaca, store, desk, agents }) {
     return true;
   }
 
+  // Browser redirect target for Alpaca Connect. No bearer token here: the one-time `state` issued
+  // by /api/oauth/start (an admin-only call) is what authorises the exchange.
+  async function oauthCallback(url, res) {
+    let ok = true;
+    let message = 'Connected to Alpaca. You can close this tab or return to the desk.';
+    try {
+      await connect.callback({
+        code: url.searchParams.get('code'),
+        state: url.searchParams.get('state'),
+        error: url.searchParams.get('error'),
+      });
+    } catch (err) {
+      ok = false;
+      message = err.message;
+    }
+    const esc = (t) => String(t).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+    res.writeHead(ok ? 200 : 400, {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'",
+      'Cache-Control': 'no-store',
+      'Referrer-Policy': 'no-referrer',
+    });
+    res.end(
+      `<!doctype html><meta charset="utf-8"><title>Alpaca Connect</title>` +
+        `<body style="font-family:system-ui;background:#0d1117;color:#e6edf3;padding:40px">` +
+        `<h1>${ok ? 'Connected' : 'Connection failed'}</h1><p>${esc(message)}</p><p><a style="color:#4c8dff" href="/">Back to the desk</a></p>`,
+    );
+  }
+
   return async function handler(req, res) {
     const url = new URL(req.url, 'http://localhost');
     const { pathname } = url;
@@ -260,6 +339,7 @@ function createApp({ config, alpaca, store, desk, agents }) {
     try {
       if (req.method === 'GET' && pathname === '/healthz') return send(res, 200, { ok: true });
       if (req.method === 'GET' && pathname === '/openapi.json') return send(res, 200, openApiSpec(config.publicUrl));
+      if (req.method === 'GET' && pathname === '/oauth/callback') return oauthCallback(url, res);
 
       if (!pathname.startsWith('/api/')) {
         if (req.method === 'GET' && serveStatic(req, res, pathname)) return;

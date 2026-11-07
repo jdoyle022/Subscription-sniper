@@ -1,0 +1,20 @@
+{
+  "name": "alpaca-trader",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Alpaca trading desk with a human-approved AI proposal queue (Claude, ChatGPT, Grok).",
+  "main": "src/server.js",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "mcp": "node src/mcp.js",
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.6.0",
+    "dotenv": "^18.0.9",
+    "openai": "^7.53.0"
+  }
+}

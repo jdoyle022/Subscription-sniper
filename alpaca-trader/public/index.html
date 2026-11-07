@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Alpaca Trader</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="login" class="login" hidden>
+    <form id="login-form" class="card">
+      <h1>Alpaca Trader</h1>
+      <p class="muted">Enter the ADMIN_TOKEN from your .env file. It is kept only for this browser tab.</p>
+      <input id="login-token" type="password" autocomplete="current-password" placeholder="Admin token" required>
+      <button type="submit" class="primary">Unlock desk</button>
+      <p id="login-error" class="error"></p>
+    </form>
+  </div>
+
+  <div id="app" hidden>
+    <header class="topbar">
+      <div class="brand">Alpaca Trader <span id="mode-badge" class="badge">…</span></div>
+      <div id="clock" class="muted">…</div>
+      <div class="top-actions">
+        <label class="switch" title="Blocks every new order (cancels and closes still work)">
+          <input type="checkbox" id="kill-switch">
+          <span>Kill switch</span>
+        </label>
+        <button id="refresh" class="ghost">Refresh</button>
+        <button id="logout" class="ghost">Lock</button>
+      </div>
+    </header>
+
+    <nav class="tabs" role="tablist">
+      <button class="tab active" data-tab="desk" role="tab">Desk</button>
+      <button class="tab" data-tab="ai" role="tab">AI seats <span id="pending-count" class="pill" hidden></span></button>
+      <button class="tab" data-tab="audit" role="tab">Audit log</button>
+    </nav>
+
+    <main>
+      <section id="tab-desk" class="tab-panel">
+        <div class="stats" id="stats"></div>
+
+        <div class="grid">
+          <div class="col">
+            <div class="card">
+              <div class="card-head">
+                <h2>Positions</h2>
+                <button id="close-all" class="danger small">Flatten all</button>
+              </div>
+              <div class="table-wrap"><table id="positions"></table></div>
+            </div>
+
+            <div class="card">
+              <div class="card-head">
+                <h2>Orders</h2>
+                <div class="seg" id="order-status">
+                  <button data-status="open" class="active">Open</button>
+                  <button data-status="closed">Closed</button>
+                  <button data-status="all">All</button>
+                </div>
+                <button id="cancel-all" class="ghost small">Cancel all open</button>
+              </div>
+              <div class="table-wrap"><table id="orders"></table></div>
+            </div>
+          </div>
+
+          <div class="col">
+            <form id="ticket" class="card">
+              <h2>Order ticket</h2>
+              <div class="row">
+                <label>Symbol<input name="symbol" id="t-symbol" placeholder="AAPL or BTC/USD" required autocomplete="off"></label>
+                <button type="button" id="quote-btn" class="ghost">Quote</button>
+              </div>
+              <div id="quote-box" class="quote muted"></div>
+
+              <div class="seg side" id="t-side">
+                <button type="button" data-side="buy" class="active buy">Buy</button>
+                <button type="button" data-side="sell" class="sell">Sell</button>
+              </div>
+
+              <div class="row">
+                <label>Type
+                  <select name="type" id="t-type">
+                    <option value="market">Market</option>
+                    <option value="limit">Limit</option>
+                    <option value="stop">Stop</option>
+                    <option value="stop_limit">Stop limit</option>
+                    <option value="trailing_stop">Trailing stop</option>
+                  </select>
+                </label>
+                <label>Time in force
+                  <select name="time_in_force" id="t-tif">
+                    <option value="day">Day</option>
+                    <option value="gtc">GTC</option>
+                    <option value="ioc">IOC</option>
+                    <option value="fok">FOK</option>
+                    <option value="opg">At open</option>
+                    <option value="cls">At close</option>
+                  </select>
+                </label>
+              </div>
+
+              <div class="row">
+                <label>Size by
+                  <select id="t-sizeby">
+                    <option value="qty">Shares / units</option>
+                    <option value="notional">Dollars</option>
+                  </select>
+                </label>
+                <label><span id="t-size-label">Quantity</span><input id="t-size" type="number" step="any" min="0" required></label>
+              </div>
+
+              <div class="row" data-show="limit_price"><label>Limit price<input name="limit_price" type="number" step="any" min="0"></label></div>
+              <div class="row" data-show="stop_price"><label>Stop price<input name="stop_price" type="number" step="any" min="0"></label></div>
+              <div class="row" data-show="trail">
+                <label>Trail %<input name="trail_percent" type="number" step="any" min="0"></label>
+                <label>or trail $<input name="trail_price" type="number" step="any" min="0"></label>
+              </div>
+
+              <label class="check" data-show="extended"><input type="checkbox" name="extended_hours"> Extended hours (limit + day only)</label>
+
+              <details id="bracket">
+                <summary>Bracket / OCO / OTO</summary>
+                <div class="row">
+                  <label>Order class
+                    <select name="order_class">
+                      <option value="simple">Simple</option>
+                      <option value="bracket">Bracket</option>
+                      <option value="oco">OCO</option>
+                      <option value="oto">OTO</option>
+                    </select>
+                  </label>
+                </div>
+                <div class="row">
+                  <label>Take-profit limit<input name="tp_limit" type="number" step="any" min="0"></label>
+                  <label>Stop-loss stop<input name="sl_stop" type="number" step="any" min="0"></label>
+                  <label>Stop-loss limit<input name="sl_limit" type="number" step="any" min="0"></label>
+                </div>
+              </details>
+
+              <div class="row actions">
+                <button type="button" id="preview-btn" class="ghost">Preview risk</button>
+                <button type="submit" id="submit-btn" class="primary">Review &amp; submit</button>
+              </div>
+              <div id="ticket-msg" class="msg"></div>
+            </form>
+          </div>
+        </div>
+      </section>
+
+      <section id="tab-ai" class="tab-panel" hidden>
+        <div class="grid">
+          <div class="col">
+            <div class="card">
+              <div class="card-head">
+                <h2>Ask the seats</h2>
+                <select id="ai-provider"></select>
+                <button id="ai-clear" class="ghost small">New conversation</button>
+              </div>
+              <p class="muted small" id="ai-note"></p>
+              <div id="chat" class="chat"></div>
+              <form id="ai-form" class="chat-form">
+                <textarea id="ai-input" rows="3" placeholder="e.g. Review my positions and propose one risk-reducing trade." required></textarea>
+                <button type="submit" class="primary" id="ai-send">Send</button>
+              </form>
+            </div>
+          </div>
+          <div class="col">
+            <div class="card">
+              <div class="card-head">
+                <h2>Proposal queue</h2>
+                <div class="seg" id="prop-filter">
+                  <button data-status="pending" class="active">Pending</button>
+                  <button data-status="">All</button>
+                </div>
+              </div>
+              <div id="proposals" class="proposals"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="tab-audit" class="tab-panel" hidden>
+        <div class="card">
+          <div class="card-head"><h2>Audit log</h2><span class="muted small">Newest first. Stored in data/audit.jsonl.</span></div>
+          <div class="table-wrap"><table id="audit"></table></div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="confirm">
+    <form method="dialog">
+      <h2 id="confirm-title">Confirm</h2>
+      <div id="confirm-body"></div>
+      <div class="row actions">
+        <button value="cancel" class="ghost">Cancel</button>
+        <button value="ok" id="confirm-ok" class="primary">Confirm</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" hidden></div>
+  <script src="app.js"></script>
+</body>
+</html>

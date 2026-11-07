@@ -1,5 +1,8 @@
 # Subscription Sniper
 
+> This repo also contains **[`alpaca-trader/`](alpaca-trader/README.md)**: a separate, self-contained
+> Alpaca trading desk with Claude, ChatGPT and Grok seats that propose trades for human approval.
+
 An API that cancels online subscriptions by driving a headless browser through each service's cancel flow. Requests go into a Redis-backed queue (BullMQ), and a separate worker process runs them with Playwright.
 
 ## Cancellation availability
